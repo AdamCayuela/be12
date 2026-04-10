@@ -1,0 +1,44 @@
+###
+# IMPORTANT :
+# Copiez-collez le contenu de ce fichier dans un fichier nommé '.gitignore' 
+# OU
+# Renommez ce fichier en '.gitignore'
+# Et assurez-vous que le .gitignore est bien positionné à la racine de votre dépôt git / de votre projet eclipse
+###
+
+# Eclipse
+.metadata/
+.classpath
+.project
+.settings/
+*.launch
+*.prefs
+
+# Bin
+bin/
+out/
+target/
+build/
+*.class
+*.jar
+*.war
+*.ear
+
+# OS
+# Windows
+Thumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+.AppleDouble
+
+# Linux
+*~
+
+# Autres IDEs
+.idea/
+*.iml
+.vscode/
+*.suo
+*.user

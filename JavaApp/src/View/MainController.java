@@ -1,0 +1,641 @@
+package View;
+
+import javafx.application.Platform;
+import javafx.geometry.Insets;
+import javafx.geometry.Orientation;
+import javafx.geometry.Pos;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.layout.*;
+import javafx.stage.FileChooser;
+import javafx.stage.Stage;
+
+import modele.*;
+import parseur.ParseurAeronefs;
+import parseur.ParseurCircuit;
+import parseur.ParseurTypeAeronefs;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.List;
+
+/**
+ * Contrôleur principal de l'application.
+ * Construit toute la fenêtre en Java pur (pas de FXML) et orchestre
+ * les interactions entre l'interface, la simulation et la vue 3D.
+ *
+ * Ce qu'il gère :
+ *  - Chargement des fichiers (circuit, types d'aéronefs, aéronefs)
+ *  - Démarrage / pause / arrêt / reprise de la simulation
+ *  - Timeline : slider 0-24h, seek, sélecteur de vitesse
+ *  - Mise à jour de la vue 3D et du panneau de conflits à chaque tick
+ *  - Menus caméra, paramètres et à propos
+ */
+public class MainController {
+
+    private final Stage stage;
+
+    // fichiers chargés par l'utilisateur
+    private File fichierCircuit;
+    private File fichierTypes;
+    private File fichierAeronefs;
+
+    // état courant de la simulation (arrêtée, en cours, en pause)
+    private enum EtatSimulation { ARRET, EN_COURS, PAUSE }
+    private EtatSimulation etat = EtatSimulation.ARRET;
+
+    // objets du modèle de simulation
+    private CircuitAD            circuit;
+    private List<TypeAeronef>    types;
+    private List<Aeronef>        aeronefs;
+    private GestionnaireConflits gestConflits;
+    private Simulation           simulation;
+    private Thread               threadSimulation;
+    /** Durée estimée de la simulation en secondes, calculée au démarrage pour caler le slider sur 24h. */
+    private double               dureeSimulation  = 1.0;
+
+    // éléments de la barre de menus
+    private MenuItem menuChargerCircuit;
+    private MenuItem menuChargerTypes;
+    private MenuItem menuChargerAeronefs;
+    private MenuItem menuQuitter;
+    private MenuItem menuVueHaute;
+    private MenuItem menuVueBasse;
+    private MenuItem menuParametres;
+    private MenuItem menuAide;
+
+    // contrôles de la barre de lecture
+    Button       btnPlay;
+    Button       btnPause;
+    Button       btnStop;
+    Label        labelTemps;
+    Slider       sliderTemps;
+    ChoiceBox<String> choixVitesse;
+    /** Facteur de vitesse choisi par l'utilisateur (×1 = simSpeed 20, la valeur par défaut). */
+    private double  vitesseFacteur    = 1.0;
+    /** Mis à vrai quand c'est la simulation qui bouge le slider, pour ne pas déclencher un seek en retour. */
+    private boolean enMiseAJourSlider = false;
+
+    // vue 3D et son conteneur
+    StackPane         conteneur3D;
+    Vue3DController   vue3D;
+
+    // panneau latéral de contrôle (distance conflit, caméra, etc.)
+    PanneauControleController panneauControle;
+
+    // barre de statut en bas de fenêtre
+    Label labelStatut;
+
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public MainController(Stage stage) {
+        this.stage = stage;
+    }
+
+    /** Construit et retourne la scène principale. */
+    public Scene buildScene() {
+        BorderPane root = new BorderPane();
+
+        VBox topBox = new VBox(buildMenuBar(), buildToolBar());
+        root.setTop(topBox);
+        root.setCenter(buildCenter());
+        root.setBottom(buildStatusBar());
+
+        Scene scene = new Scene(root, 1280, 800);
+
+        // La vue 3D doit être initialisée une fois le panneau attaché au graphe de scène
+        Platform.runLater(() -> {
+            vue3D = new Vue3DController();
+            vue3D.initialiser(conteneur3D);
+            panneauControle.setVue3DController(vue3D);
+        });
+
+        // Demander confirmation avant de fermer via la croix
+        stage.setOnCloseRequest(e -> {
+            e.consume();
+            demanderConfirmationQuitter();
+        });
+
+        return scene;
+    }
+
+    // =========================================================================
+    //  MENU BAR
+    // =========================================================================
+    private MenuBar buildMenuBar() {
+
+        menuChargerCircuit  = new MenuItem("Charger circuit AD…");
+        menuChargerTypes    = new MenuItem("Charger types aéronefs…");
+        menuChargerAeronefs = new MenuItem("Charger aéronefs…");
+        menuQuitter         = new MenuItem("Quitter");
+
+        menuChargerCircuit .setOnAction(e -> chargerFichierCircuit());
+        menuChargerTypes   .setOnAction(e -> chargerFichierTypes());
+        menuChargerAeronefs.setOnAction(e -> chargerFichierAeronefs());
+        menuQuitter        .setOnAction(e -> demanderConfirmationQuitter());
+
+        Menu menuFichier = new Menu("Fichier");
+        menuFichier.getItems().addAll(
+                menuChargerCircuit,
+                menuChargerTypes,
+                menuChargerAeronefs,
+                new SeparatorMenuItem(),
+                menuQuitter
+        );
+
+        menuVueHaute = new MenuItem("Vue haute");
+        menuVueBasse = new MenuItem("Vue basse");
+
+        menuVueHaute.setOnAction(e -> {
+            if (panneauControle != null) panneauControle.activerVueHaute();
+        });
+        menuVueBasse.setOnAction(e -> {
+            if (panneauControle != null) panneauControle.activerVueBasse();
+        });
+
+        Menu menuCamera = new Menu("Caméra");
+        menuCamera.getItems().addAll(menuVueHaute, menuVueBasse);
+
+        menuParametres = new MenuItem("Paramètres…");
+        menuParametres.setOnAction(e -> ouvrirParametres());
+
+        Menu menuParam = new Menu("Paramètres");
+        menuParam.getItems().add(menuParametres);
+
+        menuAide = new MenuItem("À propos…");
+        menuAide.setOnAction(e -> ouvrirAPropos());
+
+        Menu menuAideMenu = new Menu("Aide");
+        menuAideMenu.getItems().add(menuAide);
+
+        MenuBar bar = new MenuBar();
+        bar.getMenus().addAll(menuFichier, menuCamera, menuParam, menuAideMenu);
+        return bar;
+    }
+
+    // =========================================================================
+    //  TOOLBAR LECTURE
+    // =========================================================================
+    private ToolBar buildToolBar() {
+        btnPlay  = new Button("▶");
+        btnPause = new Button("⏸");
+        btnStop  = new Button("⏹");
+        btnPlay .setPrefSize(40, 32);
+        btnPause.setPrefSize(40, 32);
+        btnStop .setPrefSize(40, 32);
+        btnPlay .getStyleClass().add("btn-lecture");
+        btnPause.getStyleClass().add("btn-lecture");
+        btnStop .getStyleClass().add("btn-lecture");
+
+        btnPause.setDisable(true);
+        btnStop .setDisable(true);
+
+        btnPlay .setOnAction(e -> actionPlay());
+        btnPause.setOnAction(e -> actionPause());
+        btnStop .setOnAction(e -> actionStop());
+
+        Label lblTempsLabel = new Label("Temps :");
+        labelTemps = new Label("00:00");
+        labelTemps.getStyleClass().add("label-temps");
+
+        sliderTemps = new Slider(0, 24, 0);
+        sliderTemps.setShowTickLabels(true);
+        sliderTemps.setShowTickMarks(true);
+        sliderTemps.setMajorTickUnit(2);
+        sliderTemps.setMinorTickCount(1);
+        sliderTemps.setSnapToTicks(false);
+        sliderTemps.setPrefWidth(400);
+        sliderTemps.setLabelFormatter(new javafx.util.StringConverter<>() {
+            @Override public String toString(Double v) {
+                return String.format("%02.0fh", v);
+            }
+            @Override public Double fromString(String s) { return 0.0; }
+        });
+        HBox.setHgrow(sliderTemps, Priority.ALWAYS);
+
+        sliderTemps.valueProperty().addListener((obs, oldV, newV) -> {
+            // Le label suit directement la position du slider en HH:MM
+            labelTemps.setText(formaterPositionSlider(newV.doubleValue()));
+            // Si c'est l'utilisateur qui a bougé le slider (pas la simulation), on saute au bon moment
+            if (!enMiseAJourSlider && simulation != null && etat != EtatSimulation.ARRET) {
+                double secondesSimulees = (newV.doubleValue() / 24.0) * dureeSimulation;
+                simulation.requestSeek(secondesSimulees);
+            }
+        });
+
+        // Sélecteur de vitesse de simulation, style YouTube
+        ChoiceBox<String> choixVitesse = new ChoiceBox<>();
+        choixVitesse.getItems().addAll("×0.25", "×0.5", "×1", "×1.5", "×2");
+        choixVitesse.setValue("×1");
+        choixVitesse.setPrefWidth(75);
+        choixVitesse.getSelectionModel().selectedItemProperty().addListener((obs, oldV, newV) -> {
+            double facteur = switch (newV) {
+                case "×0.25" -> 0.25;
+                case "×0.5"  -> 0.5;
+                case "×1.5"  -> 1.5;
+                case "×2"    -> 2.0;
+                default      -> 1.0;
+            };
+            if (simulation != null) simulation.setSimSpeed(20.0 * facteur);
+            vitesseFacteur = facteur;  // mémorisé pour le prochain démarrage
+        });
+        this.choixVitesse = choixVitesse;
+
+        Separator sep1 = new Separator(Orientation.VERTICAL);
+        Separator sep2 = new Separator(Orientation.VERTICAL);
+        Separator sep3 = new Separator(Orientation.VERTICAL);
+
+        return new ToolBar(
+                btnPlay, btnPause, btnStop,
+                sep1,
+                lblTempsLabel, labelTemps,
+                sep2,
+                sliderTemps,
+                sep3,
+                choixVitesse
+        );
+    }
+
+    // =========================================================================
+    //  CENTRE
+    // =========================================================================
+
+    private SplitPane buildCenter() {
+        conteneur3D = new StackPane();
+        conteneur3D.getStyleClass().add("conteneur-3d");
+
+        // Texte affiché tant qu'aucun fichier n'est chargé
+        Label placeholder = new Label("Vue 3D — circuit aérodrome");
+        placeholder.getStyleClass().add("label-3d-placeholder");
+        conteneur3D.getChildren().add(placeholder);
+
+        // ── Panneau de contrôle ──────────────────────────────────────────────
+        panneauControle = new PanneauControleController(this);
+        ScrollPane scrollPanneau = new ScrollPane(panneauControle.buildView());
+        scrollPanneau.setFitToWidth(true);
+        scrollPanneau.setMinWidth(280);
+        scrollPanneau.setPrefWidth(340);
+        scrollPanneau.getStyleClass().add("panneau-scroll");
+
+        SplitPane split = new SplitPane(conteneur3D, scrollPanneau);
+        split.setDividerPositions(0.68);
+        return split;
+    }
+
+    // =========================================================================
+    //  STATUS BAR
+    // =========================================================================
+    private HBox buildStatusBar() {
+        labelStatut = new Label("Prêt.");
+        labelStatut.getStyleClass().add("label-statut");
+
+        HBox bar = new HBox(labelStatut);
+        bar.getStyleClass().add("status-bar");
+        bar.setPadding(new Insets(4, 10, 4, 10));
+        return bar;
+    }
+
+    // =========================================================================
+    //  ACTIONS FICHIER
+    // =========================================================================
+
+    private void chargerFichierCircuit() {
+        File f = choisirFichier("Charger le circuit AD");
+        if (f != null) {
+            fichierCircuit = f;
+            setStatut("Circuit chargé : " + f.getName());
+        }
+    }
+
+    private void chargerFichierTypes() {
+        File f = choisirFichier("Charger les types d'aéronefs");
+        if (f != null) {
+            fichierTypes = f;
+            setStatut("Types aéronefs chargés : " + f.getName());
+        }
+    }
+
+    private void chargerFichierAeronefs() {
+        File f = choisirFichier("Charger les aéronefs");
+        if (f != null) {
+            fichierAeronefs = f;
+            setStatut("Aéronefs chargés : " + f.getName());
+        }
+    }
+
+    private File choisirFichier(String titre) {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle(titre);
+        chooser.getExtensionFilters().addAll(
+                new FileChooser.ExtensionFilter("Fichiers texte (*.txt)", "*.txt"),
+                new FileChooser.ExtensionFilter("Tous les fichiers (*.*)", "*.*")
+        );
+        return chooser.showOpenDialog(stage);
+    }
+
+    // =========================================================================
+    //  ACTIONS LECTURE
+    // =========================================================================
+
+    private void actionPlay() {
+        if (etat == EtatSimulation.ARRET) {
+            // On ne peut pas démarrer si les 3 fichiers ne sont pas chargés
+            if (fichierCircuit == null || fichierTypes == null || fichierAeronefs == null) {
+                Alert alert = new Alert(Alert.AlertType.WARNING);
+                alert.initOwner(stage);
+                alert.setTitle("Fichiers manquants");
+                alert.setHeaderText("Veuillez charger les 3 fichiers de données.");
+                alert.setContentText(
+                        (fichierCircuit  == null ? "✗ Circuit AD\n"        : "") +
+                        (fichierTypes    == null ? "✗ Types aéronefs\n"    : "") +
+                        (fichierAeronefs == null ? "✗ Aéronefs\n"          : "")
+                );
+                alert.showAndWait();
+                return;
+            }
+            demarrerSimulation();
+        } else if (etat == EtatSimulation.PAUSE) {
+            reprendreSimulation();
+        }
+    }
+
+    private void actionPause() {
+        if (etat == EtatSimulation.EN_COURS && simulation != null) {
+            simulation.mettreEnPause();
+            etat = EtatSimulation.PAUSE;
+            btnPlay .setDisable(false);
+            btnPause.setDisable(true);
+            setStatut("Simulation en pause.");
+        }
+    }
+
+    private void actionStop() {
+        arreterSimulation();
+    }
+
+    // =========================================================================
+    //  SIMULATION
+    // =========================================================================
+
+    private void demarrerSimulation() {
+        try {
+            circuit  = ParseurCircuit.charger(fichierCircuit);
+            types    = ParseurTypeAeronefs.charger(fichierTypes);
+            aeronefs = ParseurAeronefs.charger(fichierAeronefs, types);
+        } catch (IOException ex) {
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.initOwner(stage);
+            alert.setTitle("Erreur de lecture");
+            alert.setHeaderText("Impossible de lire les fichiers.");
+            alert.setContentText(ex.getMessage());
+            alert.showAndWait();
+            return;
+        }
+
+        // On estime la durée totale pour que le slider 0-24h couvre exactement la simu
+        dureeSimulation = calculerDureeSimulation();
+
+        double distSeuil = panneauControle != null
+                ? panneauControle.getDistanceSeuil()
+                : 400.0;
+
+        gestConflits = new GestionnaireConflits(distSeuil);
+        simulation   = new Simulation(circuit, aeronefs, gestConflits);
+        simulation.setSimSpeed(20.0 * vitesseFacteur);
+
+        // Afficher le circuit 3D et préparer les sphères représentant les avions
+        if (vue3D != null) {
+            conteneur3D.getChildren().removeIf(n -> n instanceof Label); // retire le texte d'accueil
+            vue3D.afficherCircuit(circuit);
+            vue3D.initialiserSpheres(aeronefs);
+            vue3D.setCameraVueBasse();
+        }
+
+        // À chaque tick, la simulation appelle ce listener depuis son thread.
+        // On répercute les changements sur l'interface via Platform.runLater.
+        simulation.setTickListener((tempsEcoule, actifs, conflits) ->
+            Platform.runLater(() -> {
+                // Avancer le slider sans déclencher de seek en retour
+                enMiseAJourSlider = true;
+                double posSlider = (dureeSimulation > 0)
+                        ? Math.min((tempsEcoule / dureeSimulation) * 24.0, 24.0)
+                        : 0;
+                sliderTemps.setValue(posSlider);
+                enMiseAJourSlider = false;
+
+                // Mettre à jour les positions des avions dans la vue 3D
+                if (vue3D != null) {
+                    vue3D.rafraichirAeronefs(aeronefs, conflits);
+                }
+
+                // Relire la distance de conflit au cas où l'utilisateur l'a changée
+                if (panneauControle != null) {
+                    gestConflits.setDistanceSeuil(panneauControle.getDistanceSeuil());
+                }
+
+                // Afficher les conflits détectés dans le panneau latéral
+                if (panneauControle != null) {
+                    if (conflits.isEmpty()) {
+                        panneauControle.setConflits("aucun", "—");
+                    } else {
+                        GestionnaireConflits.Conflit premier = conflits.get(0);
+                        panneauControle.setConflits(
+                                premier.getA1().getIndicatif() + " / " + premier.getA2().getIndicatif(),
+                                String.format("%.0f m", premier.getDistance())
+                        );
+                    }
+                }
+
+                // Si tous les avions ont atterri, la simulation s'est arrêtée d'elle-même
+                if (!simulation.isEnCours()) {
+                    finDeSimulation();
+                }
+            })
+        );
+
+        // On démarre la simulation dans un thread daemon pour qu'il s'arrête avec l'appli
+        threadSimulation = new Thread(() -> simulation.demarrer());
+        threadSimulation.setDaemon(true);
+        threadSimulation.setName("Thread-Simulation");
+        threadSimulation.start();
+
+        etat = EtatSimulation.EN_COURS;
+        btnPlay .setDisable(true);
+        btnPause.setDisable(false);
+        btnStop .setDisable(false);
+        setStatut("Simulation en cours…");
+    }
+
+    private void reprendreSimulation() {
+        if (simulation != null) {
+            simulation.reprendreDepauze();
+            etat = EtatSimulation.EN_COURS;
+            btnPlay .setDisable(true);
+            btnPause.setDisable(false);
+            setStatut("Simulation reprise.");
+        }
+    }
+
+    private void arreterSimulation() {
+        if (simulation != null) simulation.arreter();
+        if (threadSimulation != null) threadSimulation.interrupt();
+
+        simulation       = null;
+        threadSimulation = null;
+        aeronefs         = null;
+        circuit          = null;
+
+        etat = EtatSimulation.ARRET;
+        btnPlay .setDisable(false);
+        btnPlay .setText("▶");
+        btnPause.setDisable(true);
+        btnStop .setDisable(true);
+        sliderTemps.setValue(0);
+        if (choixVitesse != null) choixVitesse.setValue("×1");
+        vitesseFacteur = 1.0;
+
+        if (panneauControle != null) panneauControle.reinitialiserConflits();
+        setStatut("Simulation arrêtée.");
+    }
+
+    /** Appelé automatiquement quand le dernier avion a atterri. */
+    private void finDeSimulation() {
+        etat = EtatSimulation.ARRET;
+        btnPlay .setDisable(false);
+        btnPause.setDisable(true);
+        btnStop .setDisable(true);
+        if (panneauControle != null) panneauControle.setConflits("terminé", "—");
+        setStatut("Simulation terminée — tous les aéronefs ont atterri.");
+    }
+
+    // =========================================================================
+    //  ACTIONS MENUS
+    // =========================================================================
+
+    private void demanderConfirmationQuitter() {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.initOwner(stage);
+        alert.setTitle("Quitter");
+        alert.setHeaderText("Quitter l'application ?");
+        alert.setContentText("La simulation en cours sera arrêtée.");
+        alert.showAndWait().ifPresent(reponse -> {
+            if (reponse == ButtonType.OK) {
+                if (simulation != null) simulation.arreter();
+                Platform.exit();
+            }
+        });
+    }
+
+    private void ouvrirParametres() {
+        Stage fenetre = new Stage();
+        fenetre.initOwner(stage);
+        fenetre.initModality(javafx.stage.Modality.WINDOW_MODAL);
+        fenetre.setTitle("Paramètres");
+        fenetre.setResizable(false);
+
+        Label lblDist = new Label("Distance conflit par défaut (m) :");
+        TextField tfDist = new TextField(
+                panneauControle != null
+                        ? String.valueOf((int) panneauControle.getDistanceSeuil())
+                        : "400"
+        );
+        tfDist.setPrefWidth(80);
+
+        Button btnOk     = new Button("OK");
+        Button btnAnnuler = new Button("Annuler");
+        btnOk.setPrefWidth(80);
+        btnAnnuler.setPrefWidth(80);
+
+        btnOk.setOnAction(e -> {
+            try {
+                double val = Double.parseDouble(tfDist.getText().replace(',', '.'));
+                if (val < 50 || val > 2000) throw new NumberFormatException();
+                if (panneauControle != null) panneauControle.setDistanceSeuil(val);
+                if (gestConflits   != null) gestConflits.setDistanceSeuil(val);
+                setStatut("Distance conflit mise à jour : " + (int) val + " m");
+                fenetre.close();
+            } catch (NumberFormatException ex) {
+                tfDist.setStyle("-fx-border-color: red;");
+                tfDist.setTooltip(new Tooltip("Valeur entre 50 et 2000"));
+            }
+        });
+        btnAnnuler.setOnAction(e -> fenetre.close());
+
+        HBox boutons = new HBox(10, btnOk, btnAnnuler);
+        boutons.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
+
+        VBox racine = new VBox(12,
+                new HBox(8, lblDist, tfDist),
+                boutons
+        );
+        racine.setPadding(new Insets(20));
+        racine.setPrefWidth(380);
+
+        fenetre.setScene(new Scene(racine));
+        fenetre.showAndWait();
+    }
+
+    private void ouvrirAPropos() {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.initOwner(stage);
+        alert.setTitle("À propos");
+        alert.setHeaderText("Simulation Tour de Piste");
+        alert.setContentText(
+                "Application de simulation de trafic aérodrome.\n\n" +
+                "Gestion des circuits AD, détection de conflits\n" +
+                "et pilotage du matériel Raspberry Pi.\n\n" +
+                "IUT — Projet BE12"
+        );
+        alert.showAndWait();
+    }
+
+    // =========================================================================
+    //  UTILITAIRES
+    // =========================================================================
+
+    /** Met à jour le message affiché en bas de fenêtre. */
+    public void setStatut(String message) {
+        if (labelStatut != null) labelStatut.setText(message);
+    }
+
+    /**
+     * Estime le temps auquel le dernier avion atterrit, en secondes simulées.
+     * Sert à caler le slider sur 24h : 100% du slider = fin de la simulation.
+     *
+     * Calcul : pour chaque avion, tempsDepart + distance_totale / vitesse.
+     * On retourne le maximum.
+     */
+    private double calculerDureeSimulation() {
+        if (circuit == null || aeronefs == null || aeronefs.isEmpty()) return 1.0;
+
+        double longueurNormal = 0;
+        for (CircuitAD.Segment s : circuit.getSegmentsNormal()) longueurNormal += s.getLongueur();
+
+        double longueurFinal = 0;
+        for (CircuitAD.Segment s : circuit.getSegmentsFinal()) longueurFinal += s.getLongueur();
+
+        double dureeMax = 1.0;
+        for (Aeronef a : aeronefs) {
+            double vitesse = a.getType().getVitesseMps();
+            if (vitesse <= 0) continue;
+            int toursNormaux = Math.max(0, a.getNbToursMax() - 1);
+            double distTotale = toursNormaux * longueurNormal + longueurFinal;
+            double fin = a.getTempsDepart() + distTotale / vitesse;
+            if (fin > dureeMax) dureeMax = fin;
+        }
+        return dureeMax;
+    }
+
+    /** Convertit une valeur du slider (0-24 heures) en texte "HH:MM". */
+    private String formaterPositionSlider(double heures) {
+        int h = (int) heures;
+        int m = (int) Math.round((heures - h) * 60);
+        if (m == 60) { h++; m = 0; }
+        return String.format("%02d:%02d", h, m);
+    }
+
+    public File  getFichierCircuit()  { return fichierCircuit;  }
+    public File  getFichierTypes()    { return fichierTypes;     }
+    public File  getFichierAeronefs() { return fichierAeronefs; }
+    public Stage getStage()           { return stage;           }
+}

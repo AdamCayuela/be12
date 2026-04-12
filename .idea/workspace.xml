@@ -5,92 +5,13 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="7297af81-bbb4-44c7-b131-0586047d5098" name="Changes" comment="corection time line + ajout du choix de vitesse de simulation ( Aeronef, Circuit AD, TypeAeronef)">
-      <change afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/libraries/javafx_sdk_17_0.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/runConfigurations/Main.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/JavaApp/JavaApp.iml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/JavaApp/src/Main.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/JavaApp/src/View/MainController.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/JavaApp/src/View/PanneauControleController.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/JavaApp/src/View/Vue3DController.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/JavaApp/src/modele/Aeronef.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/JavaApp/src/modele/CircuitAD.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/JavaApp/src/modele/GestionnaireConflits.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/JavaApp/src/modele/Phase.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/JavaApp/src/modele/Point3D.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/JavaApp/src/modele/Simulation.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/JavaApp/src/modele/TypeAeronef.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/JavaApp/src/parseur/ParseurAeronefs.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/JavaApp/src/parseur/ParseurCircuit.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/JavaApp/src/parseur/ParseurTypeAeronefs.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/JavaApp/src/resources/style.css" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/LICENSE.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bin/Main.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bin/modele/Aeronef.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bin/modele/CircuitAD$Segment.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bin/modele/CircuitAD.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bin/modele/GestionnaireConflits$Conflit.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bin/modele/GestionnaireConflits.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bin/modele/Phase.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bin/modele/Point3D.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bin/modele/Simulation$TickListener.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bin/modele/Simulation.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bin/modele/TypeAeronef.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bin/parseur/ParseurAeronefs.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bin/parseur/ParseurCircuit.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bin/parseur/ParseurTypeAeronefs.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bin/vue/MainController$1.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bin/vue/MainController$EtatSimulation.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bin/vue/MainController.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bin/vue/PanneauControleController.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bin/vue/Vue3DController.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/datas/._aeronefs.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/datas/._circuitAD4.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/datas/._typeAeronefs.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/datas/aeronefs.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/datas/circuitAD4.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/datas/typeAeronefs.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/out/production/JavaApp/Main.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/out/production/JavaApp/View/MainController$1.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/out/production/JavaApp/View/MainController$EtatSimulation.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/out/production/JavaApp/View/MainController.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/out/production/JavaApp/View/PanneauControleController.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/out/production/JavaApp/View/Vue3DController.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/out/production/JavaApp/modele/Aeronef.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/out/production/JavaApp/modele/CircuitAD$Segment.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/out/production/JavaApp/modele/CircuitAD.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/out/production/JavaApp/modele/GestionnaireConflits$Conflit.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/out/production/JavaApp/modele/GestionnaireConflits.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/out/production/JavaApp/modele/Phase.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/out/production/JavaApp/modele/Point3D.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/out/production/JavaApp/modele/Simulation$TickListener.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/out/production/JavaApp/modele/Simulation.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/out/production/JavaApp/modele/TypeAeronef.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/out/production/JavaApp/parseur/ParseurAeronefs.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/out/production/JavaApp/parseur/ParseurCircuit.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/out/production/JavaApp/parseur/ParseurTypeAeronefs.class" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/out/production/JavaApp/resources/style.css" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/Main.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/modele/Aeronef.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/modele/CircuitAD.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/modele/GestionnaireConflits.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/modele/Phase.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/modele/Point3D.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/modele/Simulation.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/modele/TypeAeronef.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/parseur/ParseurAeronefs.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/parseur/ParseurCircuit.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/parseur/ParseurTypeAeronefs.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/vue/MainController.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/vue/PanneauControleController.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/vue/Vue3DController.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/uml/SimulationTourDePiste_final.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/JavaApp/src/View/MainController.java" beforeDir="false" afterPath="$PROJECT_DIR$/JavaApp/src/View/MainController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/JavaApp/src/View/Vue3DController.java" beforeDir="false" afterPath="$PROJECT_DIR$/JavaApp/src/View/Vue3DController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/JavaApp/src/modele/CircuitAD.java" beforeDir="false" afterPath="$PROJECT_DIR$/JavaApp/src/modele/CircuitAD.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/out/production/JavaApp/View/MainController.class" beforeDir="false" afterPath="$PROJECT_DIR$/out/production/JavaApp/View/MainController.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/out/production/JavaApp/View/Vue3DController.class" beforeDir="false" afterPath="$PROJECT_DIR$/out/production/JavaApp/View/Vue3DController.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/out/production/JavaApp/modele/CircuitAD.class" beforeDir="false" afterPath="$PROJECT_DIR$/out/production/JavaApp/modele/CircuitAD.class" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -141,25 +62,32 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ASKED_SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "Application.Main.executor": "Run",
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "RunOnceActivity.MCP Project settings loaded": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "git-widget-placeholder": "adam-clean",
-    "kotlin-language-version-configured": "true",
-    "onboarding.tips.debug.path": "/Users/acayuela/IdeaProjects/be12/JavaApp/src/Main.java",
-    "project.structure.last.edited": "Libraries",
-    "project.structure.proportion": "0.15",
-    "project.structure.side.proportion": "0.2",
-    "settings.editor.selected.configurable": "org.jetbrains.plugins.gitlab.GitLabSettingsConfigurable"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ASKED_SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;Application.Main.executor&quot;: &quot;Run&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;adam-clean&quot;,
+    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;onboarding.tips.debug.path&quot;: &quot;/Users/acayuela/IdeaProjects/be12/JavaApp/src/Main.java&quot;,
+    &quot;project.structure.last.edited&quot;: &quot;Libraries&quot;,
+    &quot;project.structure.proportion&quot;: &quot;0.15&quot;,
+    &quot;project.structure.side.proportion&quot;: &quot;0.2&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;org.jetbrains.plugins.gitlab.GitLabSettingsConfigurable&quot;
   }
-}]]></component>
+}</component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
@@ -279,8 +207,19 @@
       <option name="project" value="LOCAL" />
       <updated>1775823585525</updated>
     </task>
-    <option name="localTasksCounter" value="14" />
+    <task id="LOCAL-00014" summary="corection time line + ajout du choix de vitesse de simulation ( Aeronef, Circuit AD, TypeAeronef)">
+      <option name="closed" value="true" />
+      <created>1775824646495</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1775824646495</updated>
+    </task>
+    <option name="localTasksCounter" value="15" />
     <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
     <option name="TAB_STATES">

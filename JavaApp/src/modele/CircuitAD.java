@@ -50,12 +50,15 @@ public class CircuitAD {
     private final List<Segment> segmentsLoop;
     /** Dernier tour : B → … → I → J (atterrissage), sans A ni K. */
     private final List<Segment> segmentsFinal;
+    /** Toutes les phases A→K + J : utilisé uniquement pour l'affichage 3D du tracé complet. */
+    private final List<Segment> segmentsAffichage;
 
     public CircuitAD(List<Phase> phases) {
-        this.phases         = phases;
-        this.segmentsNormal = construireSegments(false, true);   // A inclus, J exclu
-        this.segmentsLoop   = construireSegments(false, false);  // A exclu,  J exclu
-        this.segmentsFinal  = construireSegments(true,  false);  // A exclu,  K exclu, J inclus
+        this.phases            = phases;
+        this.segmentsNormal    = construireSegments(false, true);   // A inclus, J exclu
+        this.segmentsLoop      = construireSegments(false, false);  // A exclu,  J exclu
+        this.segmentsFinal     = construireSegments(true,  false);  // A exclu,  K exclu, J inclus
+        this.segmentsAffichage = construireSegmentsAffichage();     // toutes les phases A, B…K et J
     }
 
     /**
@@ -79,15 +82,30 @@ public class CircuitAD {
         return liste;
     }
 
-    public List<Phase>   getPhases()          { return phases;          }
+    /**
+     * Construit la liste de segments pour l'affichage 3D du tracé complet.
+     * Inclut toutes les phases : A (décollage), B→I (circuit), J (atterrissage) et K (remise de gaz).
+     */
+    private List<Segment> construireSegmentsAffichage() {
+        List<Segment> liste = new ArrayList<>();
+        for (Phase phase : phases) {
+            List<Point3D> pts = phase.getPoints();
+            for (int i = 0; i < pts.size() - 1; i++) {
+                liste.add(new Segment(pts.get(i), pts.get(i + 1)));
+            }
+        }
+        return liste;
+    }
+
+    public List<Phase>   getPhases()           { return phases;             }
     /** Segments du premier tour : A → B → … → I → K. */
-    public List<Segment> getSegmentsNormal()  { return segmentsNormal;  }
+    public List<Segment> getSegmentsNormal()   { return segmentsNormal;    }
     /** Segments des tours intermédiaires : B → … → I → K (sans A). */
-    public List<Segment> getSegmentsLoop()    { return segmentsLoop;    }
+    public List<Segment> getSegmentsLoop()     { return segmentsLoop;      }
     /** Segments du dernier tour : B → … → I → J (sans A, sans K). */
-    public List<Segment> getSegmentsFinal()   { return segmentsFinal;   }
-    /** Alias vers le circuit final, utilisé pour l'affichage 3D. */
-    public List<Segment> getSegmentsCircuit() { return segmentsFinal;   }
+    public List<Segment> getSegmentsFinal()    { return segmentsFinal;     }
+    /** Toutes les phases A→K + J : tracé complet affiché en 3D. */
+    public List<Segment> getSegmentsCircuit()  { return segmentsAffichage; }
 
     /** Longueur totale du dernier tour (utile pour les estimations de durée). */
     public double getLongueurTotale() {

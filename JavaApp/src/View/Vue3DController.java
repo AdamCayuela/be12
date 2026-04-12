@@ -1,9 +1,11 @@
 package View;
 
 import javafx.scene.*;
+import javafx.scene.control.Label;
 import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
 import javafx.scene.paint.PhongMaterial;
+import javafx.scene.shape.Box;
 import javafx.scene.shape.Cylinder;
 import javafx.scene.shape.Sphere;
 import javafx.scene.text.Font;
@@ -12,6 +14,7 @@ import javafx.scene.text.Text;
 import javafx.scene.text.TextAlignment;
 import javafx.scene.transform.Rotate;
 import javafx.scene.transform.Translate;
+import javafx.geometry.Pos;
 
 import modele.Aeronef;
 import modele.CircuitAD;
@@ -75,6 +78,14 @@ public class Vue3DController {
     private final Translate camTranslate = new Translate(0, 0, 0);
     private final Rotate    camRotX      = new Rotate(0, Rotate.X_AXIS);
     private final Rotate    camRotY      = new Rotate(0, Rotate.Y_AXIS);
+    private final Rotate    camRotZ      = new Rotate(0, Rotate.Z_AXIS);
+
+    // Vue active — détermine comment les boutons de déplacement se comportent
+    private enum VueMode { HAUTE, BASSE }
+    private VueMode vueMode = VueMode.HAUTE;
+
+    // Label 2D affichant la position de la caméra en bas de la vue
+    private Label labelCamPos;
 
     // ---------------------------------------------------------------
     // Initialisation
@@ -100,11 +111,11 @@ public class Vue3DController {
         camera.setNearClip(0.1);
         camera.setFarClip(15000);
         camera.setFieldOfView(50);
-        camera.getTransforms().addAll(camTranslate, camRotX, camRotY);
+        camera.getTransforms().addAll(camTranslate, camRotX, camRotY, camRotZ);
 
         // SubScene
         subScene = new SubScene(groupe3D, 800, 600, true, SceneAntialiasing.BALANCED);
-        subScene.setFill(Color.web("#0a0a18"));
+        subScene.setFill(Color.web("#87CEEB")); // bleu ciel
         subScene.setCamera(camera);
 
         subScene.widthProperty() .bind(conteneur.widthProperty());
@@ -112,7 +123,29 @@ public class Vue3DController {
 
         conteneur.getChildren().add(subScene);
 
+        // Grand carré vert plat représentant le sol (de -1000 à +1000 en X et Z)
+        Box sol = new Box(2000, 2, 2000);
+        sol.setTranslateX(0);
+        sol.setTranslateY(2);   // juste en dessous du niveau 0 (FX Y=0 = altitude 0)
+        sol.setTranslateZ(0);
+        PhongMaterial matSol = new PhongMaterial(Color.LAWNGREEN);
+        matSol.setSpecularColor(Color.BLACK);  // pas de reflet brillant → sol mat et uniforme
+        sol.setMaterial(matSol);
+        groupe3D.getChildren().add(sol);
 
+        // Label 2D position caméra, affiché en bas à gauche de la vue
+        labelCamPos = new Label("Cam — X: 0  Y: 0  Z: 0  rotX: 0°  rotY: 0°");
+        labelCamPos.setId("labelCamPos");
+        labelCamPos.setStyle(
+                "-fx-text-fill: rgba(255,255,255,0.7);" +
+                "-fx-font-size: 10px;" +
+                "-fx-font-family: monospace;" +
+                "-fx-background-color: rgba(0,0,0,0.4);" +
+                "-fx-padding: 2 6 2 6;" +
+                "-fx-background-radius: 3;"
+        );
+        StackPane.setAlignment(labelCamPos, Pos.BOTTOM_LEFT);
+        conteneur.getChildren().add(labelCamPos);
     }
 
     // ---------------------------------------------------------------
@@ -259,11 +292,14 @@ public class Vue3DController {
      * direction = (0, −sin(−55°), cos(−55°)) = (0, +0.82, +0.57) → vers +Y (bas) et +Z.
      */
     public void setCameraVueHaute() {
-        camTranslate.setX(-10);
-        camTranslate.setY(-200);   // au-dessus du circuit (circuit max Y≈−100)
-        camTranslate.setZ(-30);    // légèrement en avant du centre
-        camRotX.setAngle(-90);     // plongeante : regarde fortement vers le bas
+        vueMode = VueMode.HAUTE;
+        camTranslate.setX(20);
+        camTranslate.setY(-400);
+        camTranslate.setZ(60);
+        camRotX.setAngle(-90);
         camRotY.setAngle(0);
+        camRotZ.setAngle(180);
+        majLabelCam();
     }
 
     /**
@@ -274,11 +310,14 @@ public class Vue3DController {
      * Simule un observateur au bord de la piste regardant les aéronefs.
      */
     public void setCameraVueBasse() {
+        vueMode = VueMode.BASSE;
         camTranslate.setX(10);
-        camTranslate.setY(3);     // au niveau de la piste (FX Y≈0 = altitude 0 m)
-        camTranslate.setZ(-20);   // devant l'approche de piste
-        camRotX.setAngle(3);      // quasi-horizontal, légèrement relevé
-        camRotY.setAngle(0);
+        camTranslate.setY(-28);
+        camTranslate.setZ(408);
+        camRotX.setAngle(-15);
+        camRotY.setAngle(180);
+        camRotZ.setAngle(0);
+        majLabelCam();
     }
 
     /**
@@ -288,28 +327,54 @@ public class Vue3DController {
      * Le circuit en altitude (FX Y ≈ −50 à −100) est bien dans le champ de vue.
      */
 
-    /** Déplace la caméra en X et Z (strafe latéral + profondeur). */
+    /**
+     * Vue haute  : dx = strafe X,  dz = strafe Z (plan horizontal).
+     * Vue basse  : dx = strafe X,  dz = monter/descendre (axe Y).
+     */
     public void deplacerCamera(double dx, double dz) {
-        camTranslate.setX(camTranslate.getX() + dx);
-        camTranslate.setZ(camTranslate.getZ() + dz);
+        if (vueMode == VueMode.BASSE) {
+            camTranslate.setX(camTranslate.getX() - dx);  // inversé en vue basse
+            camTranslate.setY(camTranslate.getY() + dz);
+        } else {
+            camTranslate.setX(camTranslate.getX() - dx);  // inversé en vue haute
+            camTranslate.setZ(camTranslate.getZ() + dz);
+        }
+        majLabelCam();
     }
 
     /** Rotation horizontale de la caméra (autour de Y). */
     public void rotationCamera(double dAngle) {
         camRotY.setAngle(camRotY.getAngle() + dAngle);
+        majLabelCam();
     }
 
     /**
-     * Zoom avant/arrière : déplace la caméra le long de sa direction de vue.
-     *
-     * La direction de vue après rotX(θ) appliqué à l'axe +Z local :
-     *   direction = (0, −sin(θ), cos(θ))
-     * Zoomer = se déplacer dans cette direction (delta > 0 = rapprocher).
+     * Vue haute  : zoom le long de la direction de vue (avant/arrière).
+     * Vue basse  : avance/recule en Z (profondeur de scène).
      */
     public void zoomer(double delta) {
-        double angRad = Math.toRadians(camRotX.getAngle());
-        camTranslate.setY(camTranslate.getY() + (-Math.sin(angRad)) * delta);
-        camTranslate.setZ(camTranslate.getZ() + Math.cos(angRad) * delta);
+        if (vueMode == VueMode.BASSE) {
+            camTranslate.setZ(camTranslate.getZ() - delta);  // inversé en vue basse
+        } else {
+            double angRad = Math.toRadians(camRotX.getAngle());
+            camTranslate.setY(camTranslate.getY() + (-Math.sin(angRad)) * delta);
+            camTranslate.setZ(camTranslate.getZ() + Math.cos(angRad) * delta);
+        }
+        majLabelCam();
+    }
+
+    /** Met à jour le label de position caméra affiché en bas de la vue. */
+    private void majLabelCam() {
+        if (labelCamPos == null) return;
+        labelCamPos.setText(String.format(
+                "Cam — X: %.0f  Y: %.0f  Z: %.0f  rotX: %.0f°  rotY: %.0f°  rotZ: %.0f°",
+                camTranslate.getX(),
+                camTranslate.getY(),
+                camTranslate.getZ(),
+                camRotX.getAngle(),
+                camRotY.getAngle(),
+                camRotZ.getAngle()
+        ));
     }
 
     // ---------------------------------------------------------------

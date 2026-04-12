@@ -405,7 +405,7 @@ public class MainController {
 
         // Afficher le circuit 3D et préparer les sphères représentant les avions
         if (vue3D != null) {
-            conteneur3D.getChildren().removeIf(n -> n instanceof Label); // retire le texte d'accueil
+            conteneur3D.getChildren().removeIf(n -> n instanceof Label l && !"labelCamPos".equals(l.getId())); // retire uniquement le texte d'accueil
             vue3D.afficherCircuit(circuit);
             vue3D.initialiserSpheres(aeronefs);
             vue3D.setCameraVueBasse();

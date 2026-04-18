@@ -241,7 +241,7 @@ public class PanneauControleController {
         ledVerte = new Circle(14);
 
         ledRouge.getStyleClass().addAll("led", "led-rouge");
-        ledJaune.getStyleClass().addAll("led", "led-jaune");
+        ledJaune.getStyleClass().addAll("led", "led-orange");
         ledVerte.getStyleClass().addAll("led", "led-verte");
 
         // État initial : éteintes (grises)
@@ -251,7 +251,7 @@ public class PanneauControleController {
 
         HBox leds = new HBox(20,
                 ledGroup(ledRouge, "ROUGE"),
-                ledGroup(ledJaune, "JAUNE"),
+                ledGroup(ledJaune, "ORANGE"),
                 ledGroup(ledVerte, "VERT")
         );
         leds.setAlignment(Pos.CENTER);

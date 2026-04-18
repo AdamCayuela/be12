@@ -39,6 +39,12 @@ public class MainController {
     private File fichierCircuit;
     private File fichierTypes;
     private File fichierAeronefs;
+    /** Modèle 3D .obj global (fallback). null = sphères. */
+    private File fichierModele3D;
+    /** Modèle .obj par nom de type aéronef (prioritaire sur le global). */
+    private final java.util.Map<String, File> modeles3DParType = new java.util.HashMap<>();
+    /** Types parsés immédiatement après chargement du fichier, pour alimenter le menu. */
+    private List<TypeAeronef> typesCharges = new java.util.ArrayList<>();
 
     // état courant de la simulation (arrêtée, en cours, en pause)
     private enum EtatSimulation { ARRET, EN_COURS, PAUSE }
@@ -59,6 +65,7 @@ public class MainController {
     private MenuItem menuChargerTypes;
     private MenuItem menuChargerAeronefs;
     private MenuItem menuQuitter;
+    private Menu     menuSelection3D;
     private MenuItem menuVueHaute;
     private MenuItem menuVueBasse;
     private MenuItem menuParametres;
@@ -168,8 +175,12 @@ public class MainController {
         Menu menuAideMenu = new Menu("Aide");
         menuAideMenu.getItems().add(menuAide);
 
+        // ── Menu Sélection 3D ────────────────────────────────────────────────
+        menuSelection3D = new Menu("Sélection 3D");
+        reconstruireMenuSelection3D();   // construit la section "global" (sans types encore)
+
         MenuBar bar = new MenuBar();
-        bar.getMenus().addAll(menuFichier, menuCamera, menuParam, menuAideMenu);
+        bar.getMenus().addAll(menuFichier, menuSelection3D, menuCamera, menuParam, menuAideMenu);
         return bar;
     }
 
@@ -311,7 +322,15 @@ public class MainController {
         File f = choisirFichier("Charger les types d'aéronefs");
         if (f != null) {
             fichierTypes = f;
-            setStatut("Types aéronefs chargés : " + f.getName());
+            try {
+                typesCharges = ParseurTypeAeronefs.charger(f);
+                modeles3DParType.clear();          // reset des assignations si nouveau fichier
+                reconstruireMenuSelection3D();     // ajoute une entrée par type dans le menu
+                setStatut("Types aéronefs chargés : " + f.getName()
+                        + " (" + typesCharges.size() + " types)");
+            } catch (IOException ex) {
+                setStatut("Erreur lecture types : " + ex.getMessage());
+            }
         }
     }
 
@@ -374,6 +393,93 @@ public class MainController {
     }
 
     // =========================================================================
+    //  MENU SÉLECTION 3D  (reconstruit à chaque chargement de types)
+    // =========================================================================
+
+    /**
+     * Reconstruit entièrement le menu "Sélection 3D" :
+     *  - Une section "Tous les types" (modèle global / fallback)
+     *  - Si des types sont chargés : une section par type avec son propre .obj
+     */
+    private void reconstruireMenuSelection3D() {
+        menuSelection3D.getItems().clear();
+
+        // ── Section globale ──────────────────────────────────────────────────
+        MenuItem itemGlobalCharger  = new MenuItem("Charger modèle global (tous types)…");
+        MenuItem itemGlobalRetirer  = new MenuItem("Retirer le modèle global");
+        itemGlobalRetirer.setDisable(fichierModele3D == null);
+
+        itemGlobalCharger.setOnAction(e -> {
+            File f = choisirFichierObj("Modèle global — tous les types");
+            if (f != null) {
+                fichierModele3D = f;
+                itemGlobalRetirer.setDisable(false);
+                itemGlobalCharger.setText("Global : " + f.getName());
+                if (vue3D != null) vue3D.setModele3D(f);
+                setStatut("Modèle global : " + f.getName());
+            }
+        });
+        itemGlobalRetirer.setOnAction(e -> {
+            fichierModele3D = null;
+            itemGlobalRetirer.setDisable(true);
+            itemGlobalCharger.setText("Charger modèle global (tous types)…");
+            if (vue3D != null) vue3D.setModele3D(null);
+            setStatut("Modèle global retiré — sphères par défaut");
+        });
+
+        menuSelection3D.getItems().addAll(itemGlobalCharger, itemGlobalRetirer);
+
+        // ── Sections par type (uniquement si des types sont chargés) ─────────
+        if (!typesCharges.isEmpty()) {
+            menuSelection3D.getItems().add(new SeparatorMenuItem());
+
+            for (TypeAeronef type : typesCharges) {
+                String nomType = type.getNom();
+
+                MenuItem itemCharger = new MenuItem("  [" + nomType + "]  Charger .obj…");
+                MenuItem itemRetirer = new MenuItem("  [" + nomType + "]  Retirer");
+                itemRetirer.setDisable(!modeles3DParType.containsKey(nomType));
+
+                itemCharger.setOnAction(e -> {
+                    File f = choisirFichierObj("Modèle pour " + nomType);
+                    if (f != null) {
+                        modeles3DParType.put(nomType, f);
+                        itemRetirer.setDisable(false);
+                        itemCharger.setText("  [" + nomType + "]  " + f.getName());
+                        if (vue3D != null) vue3D.setModele3DPourType(nomType, f);
+                        setStatut("Modèle « " + nomType + " » : " + f.getName());
+                    }
+                });
+                itemRetirer.setOnAction(e -> {
+                    modeles3DParType.remove(nomType);
+                    itemRetirer.setDisable(true);
+                    itemCharger.setText("  [" + nomType + "]  Charger .obj…");
+                    if (vue3D != null) vue3D.setModele3DPourType(nomType, null);
+                    setStatut("Modèle « " + nomType + " » retiré");
+                });
+
+                menuSelection3D.getItems().addAll(itemCharger, itemRetirer);
+            }
+        } else {
+            // Indication que les types ne sont pas encore chargés
+            MenuItem infoItem = new MenuItem("(charger les types d'abord)");
+            infoItem.setDisable(true);
+            menuSelection3D.getItems().addAll(new SeparatorMenuItem(), infoItem);
+        }
+    }
+
+    /** FileChooser limité aux .obj. */
+    private File choisirFichierObj(String titre) {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle(titre);
+        chooser.getExtensionFilters().addAll(
+                new FileChooser.ExtensionFilter("Modèles 3D (*.obj)", "*.obj"),
+                new FileChooser.ExtensionFilter("Tous les fichiers (*.*)", "*.*")
+        );
+        return chooser.showOpenDialog(stage);
+    }
+
+    // =========================================================================
     //  SIMULATION
     // =========================================================================
 
@@ -403,9 +509,11 @@ public class MainController {
         simulation   = new Simulation(circuit, aeronefs, gestConflits);
         simulation.setSimSpeed(20.0 * vitesseFacteur);
 
-        // Afficher le circuit 3D et préparer les sphères représentant les avions
+        // Afficher le circuit 3D et préparer les nœuds représentant les avions (sphères ou modèle .obj)
         if (vue3D != null) {
-            conteneur3D.getChildren().removeIf(n -> n instanceof Label l && !"labelCamPos".equals(l.getId())); // retire uniquement le texte d'accueil
+            conteneur3D.getChildren().removeIf(n -> n instanceof Label l && !"labelCamPos".equals(l.getId()));
+            vue3D.setModele3D(fichierModele3D);            // modèle global (fallback)
+            vue3D.setModeles3DParType(modeles3DParType);   // modèles spécifiques par type
             vue3D.afficherCircuit(circuit);
             vue3D.initialiserSpheres(aeronefs);
             vue3D.setCameraVueBasse();
@@ -425,7 +533,7 @@ public class MainController {
 
                 // Mettre à jour les positions des avions dans la vue 3D
                 if (vue3D != null) {
-                    vue3D.rafraichirAeronefs(aeronefs, conflits);
+                    vue3D.rafraichirAeronefs(aeronefs, conflits, gestConflits.getProximites());
                 }
 
                 // Relire la distance de conflit au cas où l'utilisateur l'a changée
@@ -444,6 +552,24 @@ public class MainController {
                                 String.format("%.0f m", premier.getDistance())
                         );
                     }
+
+                    // ── LEDs ────────────────────────────────────────────────────
+                    // Rouge  : au moins une paire en alarme (distance < seuil)
+                    // Orange : au moins une paire proche mais hors alarme (seuil < distance < 2×seuil)
+                    // Vert   : RAS (aucune paire ni en alarme ni en approche)
+                    // Rouge et orange peuvent être allumées en même temps.
+                    boolean rouge  = !conflits.isEmpty();
+                    boolean orange = !gestConflits.getProximites().isEmpty();
+                    boolean verte  = !rouge && !orange;
+
+                    if (rouge)  panneauControle.allumerLed(panneauControle.ledRouge, "led-rouge");
+                    else        panneauControle.eteindreLed(panneauControle.ledRouge);
+
+                    if (orange) panneauControle.allumerLed(panneauControle.ledJaune, "led-orange");
+                    else        panneauControle.eteindreLed(panneauControle.ledJaune);
+
+                    if (verte)  panneauControle.allumerLed(panneauControle.ledVerte, "led-verte");
+                    else        panneauControle.eteindreLed(panneauControle.ledVerte);
                 }
 
                 // Si tous les avions ont atterri, la simulation s'est arrêtée d'elle-même
@@ -494,7 +620,12 @@ public class MainController {
         if (choixVitesse != null) choixVitesse.setValue("×1");
         vitesseFacteur = 1.0;
 
-        if (panneauControle != null) panneauControle.reinitialiserConflits();
+        if (panneauControle != null) {
+            panneauControle.reinitialiserConflits();
+            panneauControle.eteindreLed(panneauControle.ledRouge);
+            panneauControle.eteindreLed(panneauControle.ledJaune);
+            panneauControle.eteindreLed(panneauControle.ledVerte);
+        }
         setStatut("Simulation arrêtée.");
     }
 

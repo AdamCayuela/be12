@@ -20,6 +20,10 @@ public class Aeronef {
     /** Position 3D courante, mise à jour à chaque tick de la simulation. */
     private Point3D positionCourante;
 
+    /** Direction du segment courant en coordonnées circuit (dx et dz, non normalisés). */
+    private double segDx = 1.0;
+    private double segDz = 0.0;
+
     public Aeronef(String indicatif, TypeAeronef type, int nbToursMax, double tempsDepart) {
         this.indicatif   = indicatif;
         this.type        = type;
@@ -53,7 +57,9 @@ public class Aeronef {
                 actif            = true;
                 segmentIndex     = 0;
                 distSurSegment   = 0.0;
-                positionCourante = segmentsActuels(segmentsNormal, segmentsLoop, segmentsFinal).get(0).getDebut();
+                List<CircuitAD.Segment> segs = segmentsActuels(segmentsNormal, segmentsLoop, segmentsFinal);
+                positionCourante = segs.get(0).getDebut();
+                mettreAJourDirection(segs);
             } else {
                 return;
             }
@@ -74,6 +80,10 @@ public class Aeronef {
                 // L'avion dépasse la fin du segment, on passe au suivant
                 distAParc -= resteSurSeg;
                 segmentIndex++;
+
+                if (segmentIndex < segments.size()) {
+                    mettreAJourDirection(segments);
+                }
 
                 if (segmentIndex >= segments.size()) {
                     // Fin d'un tour complet
@@ -117,6 +127,16 @@ public class Aeronef {
         return segmentsLoop;
     }
 
+    /** Met à jour la direction (dx, dz) d'après le segment courant. */
+    private void mettreAJourDirection(List<CircuitAD.Segment> segments) {
+        if (segmentIndex < segments.size()) {
+            Point3D debut = segments.get(segmentIndex).getDebut();
+            Point3D fin   = segments.get(segmentIndex).getFin();
+            segDx = fin.getX() - debut.getX();
+            segDz = fin.getZ() - debut.getZ();
+        }
+    }
+
     public String      getIndicatif()        { return indicatif;       }
     public TypeAeronef getType()             { return type;            }
     public int         getNbToursMax()       { return nbToursMax;      }
@@ -125,6 +145,10 @@ public class Aeronef {
     public boolean     isTermine()           { return termine;         }
     public int         getToursEffectues()   { return toursEffectues;  }
     public Point3D     getPositionCourante() { return positionCourante; }
+    /** Direction X du segment courant (coordonnées circuit, non normalisé). */
+    public double      getSegDx()            { return segDx;           }
+    /** Direction Z du segment courant (coordonnées circuit, non normalisé). */
+    public double      getSegDz()            { return segDz;           }
 
     /** Remet l'avion à son état initial, prêt pour un nouveau départ. */
     public void reinitialiser() {

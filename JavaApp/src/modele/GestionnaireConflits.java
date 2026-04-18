@@ -33,30 +33,39 @@ public class GestionnaireConflits {
 
     // ---------------------------------------------------------------
 
-    private double        distanceSeuil;  // mètres
+    private double        distanceSeuil;   // mètres — seuil d'alarme (LED rouge)
     private List<Conflit> conflitsActuels = new ArrayList<>();
+    /**
+     * Paires "proches" : distance comprise entre le seuil d'alarme et 2× ce seuil.
+     * Déclenche la LED orange (approche détectée, pas encore en alarme).
+     */
+    private List<Conflit> proximites       = new ArrayList<>();
 
     public GestionnaireConflits(double distanceSeuil) {
         this.distanceSeuil = distanceSeuil;
     }
 
-    public double getDistanceSeuil()            { return distanceSeuil;           }
-    public void   setDistanceSeuil(double d)    { this.distanceSeuil = d;         }
-    public List<Conflit> getConflitsActuels()   { return conflitsActuels;         }
+    public double        getDistanceSeuil()          { return distanceSeuil;    }
+    public void          setDistanceSeuil(double d)  { this.distanceSeuil = d;  }
+    public List<Conflit> getConflitsActuels()         { return conflitsActuels; }
+    /** Paires proches mais hors alarme (distance ∈ ]seuil, 2×seuil]). LED orange. */
+    public List<Conflit> getProximites()              { return proximites;       }
 
     /**
-     * Analyse la liste d'aéronefs actifs et met à jour {@link #conflitsActuels}.
-     * @param aeronefs liste complète (actifs et non actifs)
-     * @return liste des conflits détectés
+     * Analyse tous les aéronefs actifs et remplit deux listes :
+     *  - conflitsActuels : distance ≤ seuil          → LED rouge
+     *  - proximites      : seuil < distance ≤ 2×seuil → LED orange
+     *
+     * @param aeronefs liste complète (actifs et inactifs)
+     * @return conflits d'alarme (≤ seuil)
      */
     public List<Conflit> detecter(List<Aeronef> aeronefs) {
         conflitsActuels = new ArrayList<>();
+        proximites      = new ArrayList<>();
 
         List<Aeronef> actifs = new ArrayList<>();
         for (Aeronef a : aeronefs) {
-            if (a.isActif() && a.getPositionCourante() != null) {
-                actifs.add(a);
-            }
+            if (a.isActif() && a.getPositionCourante() != null) actifs.add(a);
         }
 
         for (int i = 0; i < actifs.size(); i++) {
@@ -65,7 +74,9 @@ public class GestionnaireConflits {
                 Aeronef a2 = actifs.get(j);
                 double  d  = a1.getPositionCourante().distanceTo(a2.getPositionCourante());
                 if (d <= distanceSeuil) {
-                    conflitsActuels.add(new Conflit(a1, a2, d));
+                    conflitsActuels.add(new Conflit(a1, a2, d));         // alarme rouge
+                } else if (d <= distanceSeuil * 2.0) {
+                    proximites.add(new Conflit(a1, a2, d));              // approche orange
                 }
             }
         }

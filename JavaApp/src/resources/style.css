@@ -105,6 +105,47 @@
     -fx-padding:          3 11;
 }
 
+/* ── ChoiceBox (sélecteur vitesse) ───────────────────────────── */
+.choice-box {
+    -fx-background-color:  rgba(255,255,255,0.80);
+    -fx-border-color:      rgba(180,200,235,0.70);
+    -fx-border-radius:     9;
+    -fx-background-radius: 9;
+    -fx-border-width:      1;
+    -fx-cursor:            hand;
+    -fx-font-size:         12px;
+    -fx-effect:            dropshadow(gaussian, rgba(60,80,160,0.12), 6, 0, 0, 2);
+}
+.choice-box:hover {
+    -fx-background-color: rgba(255,255,255,0.97);
+    -fx-border-color:     rgba(88,120,224,0.55);
+    -fx-effect:           dropshadow(gaussian, rgba(88,120,224,0.22), 10, 0, 0, 3);
+}
+.choice-box .label {
+    -fx-text-fill:    #2a3558;
+    -fx-font-weight:  bold;
+}
+.choice-box .open-button .arrow {
+    -fx-background-color: #5878e0;
+}
+.choice-box-popup .list-view {
+    -fx-background-color: rgba(255,255,255,0.97);
+    -fx-border-color:     rgba(180,200,235,0.70);
+    -fx-border-radius:    8;
+    -fx-background-radius:8;
+    -fx-effect:           dropshadow(gaussian, rgba(60,80,160,0.18), 12, 0, 0, 4);
+}
+.choice-box-popup .list-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill:        #1c2033;
+    -fx-padding:          5 14;
+}
+.choice-box-popup .list-cell:hover,
+.choice-box-popup .list-cell:selected {
+    -fx-background-color: rgba(88,120,224,0.12);
+    -fx-text-fill:        #3a5ad0;
+}
+
 /* ── Slider ───────────────────────────────────────────────────── */
 .slider .track {
     -fx-background-color: rgba(200,210,235,0.55);
@@ -297,7 +338,12 @@
 .led-rouge {
     -fx-fill:   #e03030;
     -fx-stroke: #b01818;
-    -fx-effect: dropshadow(gaussian, rgba(224,48,48,0.55), 12, 0.5, 0, 0);
+    -fx-effect: dropshadow(gaussian, rgba(224,48,48,0.65), 14, 0.6, 0, 0);
+}
+.led-orange {
+    -fx-fill:   #e87820;
+    -fx-stroke: #b05008;
+    -fx-effect: dropshadow(gaussian, rgba(232,120,32,0.65), 14, 0.6, 0, 0);
 }
 .led-jaune {
     -fx-fill:   #e8a820;
@@ -307,7 +353,7 @@
 .led-verte {
     -fx-fill:   #30b850;
     -fx-stroke: #18883a;
-    -fx-effect: dropshadow(gaussian, rgba(48,184,80,0.55), 12, 0.5, 0, 0);
+    -fx-effect: dropshadow(gaussian, rgba(48,184,80,0.65), 14, 0.6, 0, 0);
 }
 
 /* ── Voyants ──────────────────────────────────────────────────── */

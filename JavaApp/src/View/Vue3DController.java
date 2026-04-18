@@ -1,7 +1,11 @@
 package View;
 
+import javafx.application.Platform;
+import javafx.geometry.Insets;
 import javafx.scene.*;
 import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
+import javafx.scene.layout.GridPane;
 import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
 import javafx.scene.paint.PhongMaterial;
@@ -15,11 +19,16 @@ import javafx.scene.text.TextAlignment;
 import javafx.scene.transform.Rotate;
 import javafx.scene.transform.Translate;
 import javafx.geometry.Pos;
+import javafx.stage.Stage;
+import javafx.scene.Scene;
+
+import javafx17obj.ObjViewer3D;
 
 import modele.Aeronef;
 import modele.CircuitAD;
 import modele.GestionnaireConflits;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -58,6 +67,7 @@ public class Vue3DController {
     private static final Color COLOR_MEDIUM  = Color.LIMEGREEN;
     private static final Color COLOR_HIGH    = Color.ORANGE;
     private static final Color COLOR_CONFLIT = Color.RED;
+    private static final Color COLOR_PROCHE  = Color.ORANGE;
     private static final Color COLOR_CIRCUIT = Color.web("#aaaaaa");
     private static final Color COLOR_LABEL   = Color.WHITE;
 
@@ -69,10 +79,25 @@ public class Vue3DController {
     private Group             groupe3D;
     private Group             groupeAeronefs;
 
-    /** Sphère par indicatif. */
-    private final Map<String, Sphere> sphereMap = new HashMap<>();
+    /** Sphère par indicatif (null si on utilise un modèle .obj). */
+    private final Map<String, Sphere>  sphereMap  = new HashMap<>();
+    /** Nœud 3D principal par indicatif (sphère OU modèle .obj chargé). */
+    private final Map<String, Node>                       noeudMap      = new HashMap<>();
+    /** Rotation de cap (Y) par indicatif — mise à jour à chaque tick pour les modèles .obj. */
+    private final Map<String, Rotate>                     rotCapMap     = new HashMap<>();
     /** Label Text 3D par indicatif. */
-    private final Map<String, Text>   textMap   = new HashMap<>();
+    private final Map<String, Text>                       textMap       = new HashMap<>();
+    /** Aéronef par indicatif — pour la fenêtre de détail au clic. */
+    private final Map<String, Aeronef>                    aeronefMap    = new HashMap<>();
+    /** MeshViews du modèle .obj par indicatif — pour changer la couleur comme les sphères. */
+    private final Map<String, List<javafx.scene.shape.MeshView>> meshViewsMap = new HashMap<>();
+    /** Couleurs diffuses d'origine par MeshView — pour restaurer après un conflit/proximité. */
+    private final Map<String, Map<javafx.scene.shape.MeshView, Color>> meshOrigColorsMap = new HashMap<>();
+
+    /** Modèle .obj global (fallback pour tous les types sans modèle spécifique). null = sphères. */
+    private File modele3DFile = null;
+    /** Modèle .obj par nom de type aéronef. Prioritaire sur le modèle global. */
+    private final Map<String, File> modeles3DParType = new HashMap<>();
 
     // Transforms caméra
     private final Translate camTranslate = new Translate(0, 0, 0);
@@ -153,47 +178,32 @@ public class Vue3DController {
     // ---------------------------------------------------------------
 
     /**
-     * Affiche le circuit sous forme de cylindres (segments A→J).
+     * Affiche le circuit sous forme de petites sphères aux extrémités de chaque segment.
      * À appeler depuis le thread FX.
      */
     public void afficherCircuit(CircuitAD circuit) {
-        List<Node> tubes = new ArrayList<>();
+        PhongMaterial mat = new PhongMaterial(COLOR_CIRCUIT);
+        mat.setSpecularColor(Color.BLACK);
+
+        // Utiliser un Set de positions déjà placées pour éviter les doublons aux jonctions
+        java.util.Set<String> vus = new java.util.HashSet<>();
+        List<Node> noeuds = new ArrayList<>();
+
         for (CircuitAD.Segment seg : circuit.getSegmentsCircuit()) {
-            Node tube = creerTube(seg.getDebut(), seg.getFin(), COLOR_CIRCUIT);
-            if (tube != null) tubes.add(tube);
+            for (modele.Point3D p : new modele.Point3D[]{seg.getDebut(), seg.getFin()}) {
+                String cle = Math.round(p.getX()) + "," + Math.round(p.getY()) + "," + Math.round(p.getZ());
+                if (vus.add(cle)) {
+                    javafx.geometry.Point3D fx = toFx(p);
+                    Sphere s = new Sphere(RAYON_TUBE);
+                    s.setMaterial(mat);
+                    s.setTranslateX(fx.getX());
+                    s.setTranslateY(fx.getY());
+                    s.setTranslateZ(fx.getZ());
+                    noeuds.add(s);
+                }
+            }
         }
-        groupe3D.getChildren().addAll(tubes);
-    }
-
-    /** Cylindre orienté entre deux points 3D du circuit. */
-    private Node creerTube(modele.Point3D p1, modele.Point3D p2, Color couleur) {
-        javafx.geometry.Point3D fx1 = toFx(p1);
-        javafx.geometry.Point3D fx2 = toFx(p2);
-        javafx.geometry.Point3D dir = fx2.subtract(fx1);
-        double longueur = dir.magnitude();
-        if (longueur < 0.001) return null;
-
-        Cylinder cyl = new Cylinder(RAYON_TUBE, longueur);
-        cyl.setMaterial(new PhongMaterial(couleur));
-
-        javafx.geometry.Point3D milieu = fx1.midpoint(fx2);
-        cyl.setTranslateX(milieu.getX());
-        cyl.setTranslateY(milieu.getY());
-        cyl.setTranslateZ(milieu.getZ());
-
-        // Aligner le cylindre (axe par défaut = Y) vers la direction du segment
-        javafx.geometry.Point3D axeY  = new javafx.geometry.Point3D(0, 1, 0);
-        javafx.geometry.Point3D dirN  = dir.normalize();
-        javafx.geometry.Point3D axeRot = axeY.crossProduct(dirN);
-        double angle = Math.toDegrees(Math.acos(
-                Math.max(-1.0, Math.min(1.0, axeY.dotProduct(dirN)))
-        ));
-
-        if (axeRot.magnitude() > 1e-6) {
-            cyl.getTransforms().add(new Rotate(angle, axeRot));
-        }
-
-        return cyl;
+        groupe3D.getChildren().addAll(noeuds);
     }
 
     // ---------------------------------------------------------------
@@ -207,26 +217,132 @@ public class Vue3DController {
     public void initialiserSpheres(List<Aeronef> aeronefs) {
         groupeAeronefs.getChildren().clear();
         sphereMap.clear();
+        noeudMap.clear();
+        rotCapMap.clear();
         textMap.clear();
+        aeronefMap.clear();
+        meshViewsMap.clear();
+        meshOrigColorsMap.clear();
 
         for (Aeronef a : aeronefs) {
-            // --- Sphère ---
-            Sphere sphere = new Sphere(RAYON_SPHERE);
-            sphere.setMaterial(new PhongMaterial(
-                    couleurParCategorie(a.getType().getCategorie())));
-            sphere.setVisible(false);
-            sphereMap.put(a.getIndicatif(), sphere);
-            groupeAeronefs.getChildren().add(sphere);
+            aeronefMap.put(a.getIndicatif(), a);
 
-            // --- Label : "INDICATIF\nNomType" ---
+            // --- Nœud principal : modèle .obj si dispo, sinon sphère ---
+            // Priorité : modèle spécifique au type > modèle global > sphère
+            File fichierModele = modeles3DParType.getOrDefault(a.getType().getNom(), modele3DFile);
+            Node noeudPrincipal;
+            if (fichierModele != null) {
+                Node modele = chargerNoeudModele(fichierModele);
+                if (modele != null) {
+                    // Rotation de cap (Y) insérée en tête des transforms, avant le flip X
+                    Rotate rotCap = new Rotate(0, Rotate.Y_AXIS);
+                    modele.getTransforms().add(0, rotCap);
+                    rotCapMap.put(a.getIndicatif(), rotCap);
+
+                    modele.setVisible(false);
+                    modele.setCursor(javafx.scene.Cursor.HAND);
+                    modele.setOnMouseClicked(e -> ouvrirFenetreInfo(a));
+                    noeudPrincipal = modele;
+
+                    // Collecter tous les MeshViews du modèle et mémoriser leurs couleurs d'origine
+                    List<javafx.scene.shape.MeshView> meshes = new ArrayList<>();
+                    collecterMeshViews(modele, meshes);
+                    meshViewsMap.put(a.getIndicatif(), meshes);
+                    Map<javafx.scene.shape.MeshView, Color> origColors = new HashMap<>();
+                    for (javafx.scene.shape.MeshView mv : meshes) {
+                        if (mv.getMaterial() instanceof PhongMaterial pm) {
+                            origColors.put(mv, pm.getDiffuseColor() != null
+                                    ? pm.getDiffuseColor() : Color.WHITE);
+                        }
+                    }
+                    meshOrigColorsMap.put(a.getIndicatif(), origColors);
+                } else {
+                    // Échec du chargement → fallback sphère
+                    noeudPrincipal = creerSphere(a);
+                    sphereMap.put(a.getIndicatif(), (Sphere) noeudPrincipal);
+                }
+            } else {
+                noeudPrincipal = creerSphere(a);
+                sphereMap.put(a.getIndicatif(), (Sphere) noeudPrincipal);
+            }
+            noeudMap.put(a.getIndicatif(), noeudPrincipal);
+            groupeAeronefs.getChildren().add(noeudPrincipal);
+
+            // --- Label texte : "INDICATIF\nNomType" ---
             Text label = new Text(a.getIndicatif() + "\n" + a.getType().getNom());
             label.setFill(COLOR_LABEL);
             label.setFont(Font.font("System", FontWeight.BOLD, 9));
             label.setTextAlignment(TextAlignment.CENTER);
             label.setVisible(false);
+            label.setScaleX(-1);  // corrige l'effet miroir causé par rotZ=180 / rotY=180
+            label.setCursor(javafx.scene.Cursor.HAND);
+            label.setOnMouseClicked(e -> ouvrirFenetreInfo(a));
             textMap.put(a.getIndicatif(), label);
             groupeAeronefs.getChildren().add(label);
         }
+    }
+
+    /** Crée et retourne une sphère configurée pour un aéronef. */
+    private Sphere creerSphere(Aeronef a) {
+        Sphere sphere = new Sphere(RAYON_SPHERE);
+        sphere.setMaterial(new PhongMaterial(couleurParCategorie(a.getType().getCategorie())));
+        sphere.setVisible(false);
+        sphere.setCursor(javafx.scene.Cursor.HAND);
+        sphere.setOnMouseClicked(e -> ouvrirFenetreInfo(a));
+        return sphere;
+    }
+
+    /**
+     * Charge un modèle .obj via ObjViewer3D (même API que l'exemple),
+     * extrait le Group modèle de la SubScene interne, le détache,
+     * puis le redimensionne pour que sa plus grande dimension = diamètre de la sphère.
+     * Retourne null en cas d'échec → fallback sphère automatique.
+     *
+     * Appelée une fois par aéronef au démarrage de la simulation.
+     */
+    private Node chargerNoeudModele(File fichier) {
+        try {
+            // Créer un viewer temporaire juste pour charger le modèle
+            ObjViewer3D viewer = new ObjViewer3D(1, 1);
+            viewer.loadObj(fichier.getAbsolutePath());
+
+            // Le modèle est le dernier Group enfant du monde 3D interne
+            // (les autres enfants sont des lumières)
+            javafx.scene.Group world = (javafx.scene.Group) viewer.getSubScene().getRoot();
+            javafx.scene.Group modelGroup = null;
+            for (Node n : world.getChildren()) {
+                if (n instanceof javafx.scene.Group g) modelGroup = g;
+            }
+            if (modelGroup == null) return null;
+
+            // Détacher du viewer interne pour l'intégrer dans notre scène
+            world.getChildren().remove(modelGroup);
+
+            // Rotation -180° sur X pour corriger l'orientation du modèle
+            modelGroup.getTransforms().add(new Rotate(-180, Rotate.X_AXIS));
+
+            return modelGroup;
+        } catch (Exception ex) {
+            System.err.println("[Vue3D] Échec chargement modèle .obj («" + fichier.getName() + "») : " + ex.getMessage());
+            return null;  // → fallback sphère
+        }
+    }
+
+    /** Définit le fichier .obj global (tous types sans modèle propre). null = sphères. */
+    public void setModele3D(File f) {
+        this.modele3DFile = f;
+    }
+
+    /** Assigne un fichier .obj à un type spécifique. null = retirer (retombe sur le global). */
+    public void setModele3DPourType(String typeNom, File f) {
+        if (f != null) modeles3DParType.put(typeNom, f);
+        else           modeles3DParType.remove(typeNom);
+    }
+
+    /** Remplace toute la map type→fichier (appelé au démarrage de la simulation). */
+    public void setModeles3DParType(Map<String, File> map) {
+        modeles3DParType.clear();
+        modeles3DParType.putAll(map);
     }
 
     /**
@@ -234,39 +350,77 @@ public class Vue3DController {
      * À appeler via Platform.runLater() depuis le thread simulation.
      */
     public void rafraichirAeronefs(List<Aeronef> aeronefs,
-                                   List<GestionnaireConflits.Conflit> conflits) {
+                                   List<GestionnaireConflits.Conflit> conflits,
+                                   List<GestionnaireConflits.Conflit> proximites) {
 
-        // Indicatifs en conflit (pour couleur rouge)
-        List<String> enConflit = new ArrayList<>();
+        // Indicatifs en conflit (rouge) et en proximité (orange)
+        List<String> enConflit  = new ArrayList<>();
+        List<String> enProximite = new ArrayList<>();
         for (GestionnaireConflits.Conflit c : conflits) {
             enConflit.add(c.getA1().getIndicatif());
             enConflit.add(c.getA2().getIndicatif());
         }
+        for (GestionnaireConflits.Conflit c : proximites) {
+            enProximite.add(c.getA1().getIndicatif());
+            enProximite.add(c.getA2().getIndicatif());
+        }
 
         for (Aeronef a : aeronefs) {
-            Sphere sphere = sphereMap.get(a.getIndicatif());
+            Node   noeud  = noeudMap .get(a.getIndicatif());
+            Sphere sphere = sphereMap.get(a.getIndicatif()); // null si modèle .obj
             Text   label  = textMap  .get(a.getIndicatif());
 
-            if (sphere == null) continue;
+            if (noeud == null) continue;
 
             if (a.isActif() && a.getPositionCourante() != null) {
                 javafx.geometry.Point3D pos = toFx(a.getPositionCourante());
 
-                // --- Sphère ---
-                sphere.setTranslateX(pos.getX());
-                sphere.setTranslateY(pos.getY());
-                sphere.setTranslateZ(pos.getZ());
-                sphere.setVisible(true);
+                // --- Positionner le nœud principal (sphère ou modèle .obj) ---
+                noeud.setTranslateX(pos.getX());
+                noeud.setTranslateY(pos.getY());
+                noeud.setTranslateZ(pos.getZ());
+                noeud.setVisible(true);
 
-                Color couleur = enConflit.contains(a.getIndicatif())
-                        ? COLOR_CONFLIT
-                        : couleurParCategorie(a.getType().getCategorie());
-                ((PhongMaterial) sphere.getMaterial()).setDiffuseColor(couleur);
+                // Orienter le modèle .obj vers la direction du segment courant
+                Rotate rotCap = rotCapMap.get(a.getIndicatif());
+                if (rotCap != null) {
+                    double angle = Math.toDegrees(Math.atan2(-a.getSegDz(), a.getSegDx()));
+                    rotCap.setAngle(angle);
+                }
 
-                // --- Label : positionné au-dessus de la sphère ---
+                // ── Couleur sphère ──────────────────────────────────────────
+                if (sphere != null) {
+                    Color couleur = enConflit.contains(a.getIndicatif()) ? COLOR_CONFLIT
+                            : enProximite.contains(a.getIndicatif())    ? COLOR_PROCHE
+                            : couleurParCategorie(a.getType().getCategorie());
+                    ((PhongMaterial) sphere.getMaterial()).setDiffuseColor(couleur);
+                }
+
+                // ── Couleur modèle .obj (via ses MeshViews) ─────────────────
+                List<javafx.scene.shape.MeshView> meshes = meshViewsMap.get(a.getIndicatif());
+                if (meshes != null) {
+                    boolean conflit   = enConflit.contains(a.getIndicatif());
+                    boolean proximite = enProximite.contains(a.getIndicatif());
+                    Map<javafx.scene.shape.MeshView, Color> origColors =
+                            meshOrigColorsMap.get(a.getIndicatif());
+
+                    for (javafx.scene.shape.MeshView mv : meshes) {
+                        if (!(mv.getMaterial() instanceof PhongMaterial pm)) continue;
+                        if (conflit) {
+                            pm.setDiffuseColor(COLOR_CONFLIT);
+                        } else if (proximite) {
+                            pm.setDiffuseColor(COLOR_PROCHE);
+                        } else if (origColors != null) {
+                            // Restaurer la couleur d'origine du matériau
+                            pm.setDiffuseColor(origColors.getOrDefault(mv, Color.WHITE));
+                        }
+                    }
+                }
+
+                // --- Label : positionné au-dessus du nœud ---
                 if (label != null) {
                     label.setTranslateX(pos.getX() + LABEL_OFFSET_X);
-                    label.setTranslateY(pos.getY() - LABEL_OFFSET_Y); // −Y = vers le haut en FX
+                    label.setTranslateY(pos.getY() - LABEL_OFFSET_Y);
                     label.setTranslateZ(pos.getZ());
                     label.setFill(enConflit.contains(a.getIndicatif())
                             ? Color.RED : COLOR_LABEL);
@@ -274,7 +428,7 @@ public class Vue3DController {
                 }
 
             } else {
-                sphere.setVisible(false);
+                noeud.setVisible(false);
                 if (label != null) label.setVisible(false);
             }
         }
@@ -392,6 +546,64 @@ public class Vue3DController {
                -p.getY() / SCALE,   // altitude → FX Y (inversé : haut = négatif)
                 p.getZ() / SCALE    // Nord-Sud → FX Z (profondeur)
         );
+    }
+
+    /**
+     * Ouvre une petite fenêtre flottante avec les infos de l'aéronef cliqué.
+     * Fonctionne quel que soit le thread appelant.
+     */
+    private void ouvrirFenetreInfo(Aeronef a) {
+        Platform.runLater(() -> {
+            Stage fenetre = new Stage();
+            fenetre.setTitle(a.getIndicatif());
+            fenetre.setResizable(false);
+
+            GridPane grid = new GridPane();
+            grid.setHgap(14);
+            grid.setVgap(8);
+            grid.setPadding(new Insets(16));
+
+            int row = 0;
+            grid.add(info("Indicatif",  a.getIndicatif()),                    0, row++);
+            grid.add(info("Type",       a.getType().getNom()),                 0, row++);
+            grid.add(info("Catégorie",  a.getType().getCategorie()),           0, row++);
+            grid.add(info("Vitesse",    String.format("%.0f m/s  (%.0f km/h)",
+                          a.getType().getVitesseMps(),
+                          a.getType().getVitesseMps() * 3.6)),                 0, row++);
+            grid.add(info("Tours max",  String.valueOf(a.getNbToursMax())),    0, row++);
+            grid.add(info("Départ",     String.format("%.0f s", a.getTempsDepart())), 0, row++);
+
+            if (a.getPositionCourante() != null) {
+                modele.Point3D pos = a.getPositionCourante();
+                grid.add(info("Position",
+                        String.format("x=%.0f  y=%.0f  z=%.0f", pos.getX(), pos.getY(), pos.getZ())),
+                        0, row);
+            }
+
+            fenetre.setScene(new Scene(grid));
+            fenetre.show();
+        });
+    }
+
+    /** Crée un Label "clé : valeur" pour la grille d'infos. */
+    private Label info(String cle, String valeur) {
+        Label l = new Label(cle + " :  " + valeur);
+        l.setStyle("-fx-font-family: monospace; -fx-font-size: 12px;");
+        return l;
+    }
+
+    /**
+     * Parcourt récursivement un nœud et ajoute tous les MeshView trouvés dans la liste.
+     * Utilisé pour collecter les surfaces colorables d'un modèle .obj chargé.
+     */
+    private void collecterMeshViews(Node node, List<javafx.scene.shape.MeshView> result) {
+        if (node instanceof javafx.scene.shape.MeshView mv) {
+            result.add(mv);
+        } else if (node instanceof Group g) {
+            for (Node enfant : g.getChildren()) {
+                collecterMeshViews(enfant, result);
+            }
+        }
     }
 
     private Color couleurParCategorie(String categorie) {

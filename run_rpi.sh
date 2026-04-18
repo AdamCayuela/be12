@@ -1,12 +1,12 @@
 #!/bin/bash
 # ============================================================
 # Script de compilation et lancement - Simulation Tour de Piste
-# Raspberry Pi - Java 21 (Temurin) + JavaFX 17
+# Raspberry Pi - Java 21 (Temurin) + JavaFX 21
 # ============================================================
 
 JAVA=/opt/java21/bin/java
 JAVAC=/opt/java21/bin/javac
-JAVAFX=/opt/javafx-17/lib
+JAVAFX=/opt/javafx-21/lib
 LIB=/home/cayuelad/libs/JavaFX17_Obj.jar
 SRC=~/be12/JavaApp/src
 OUT=~/be12/out
@@ -31,6 +31,7 @@ cp -r $SRC/resources $OUT/resources
 
 echo ">>> Lancement..."
 $JAVA \
+  -Dprism.order=es2 \
   --module-path $JAVAFX \
   --add-modules javafx.controls,javafx.fxml,javafx.graphics \
   -cp $OUT:$LIB \

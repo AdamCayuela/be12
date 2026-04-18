@@ -7,6 +7,7 @@
 JAVA=/opt/java21/bin/java
 JAVAC=/opt/java21/bin/javac
 JAVAFX=/opt/javafx-17/lib
+LIB=/home/cayuelad/libs/JavaFX17_Obj.jar
 SRC=~/be12/JavaApp/src
 OUT=~/be12/out
 
@@ -16,6 +17,7 @@ mkdir -p $OUT
 $JAVAC \
   --module-path $JAVAFX \
   --add-modules javafx.controls,javafx.fxml,javafx.graphics \
+  -cp $LIB \
   -d $OUT \
   $(find $SRC -name "*.java")
 
@@ -31,5 +33,5 @@ echo ">>> Lancement..."
 $JAVA \
   --module-path $JAVAFX \
   --add-modules javafx.controls,javafx.fxml,javafx.graphics \
-  -cp $OUT \
+  -cp $OUT:$LIB \
   Main

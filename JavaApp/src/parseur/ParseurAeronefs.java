@@ -12,8 +12,35 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * Lit un fichier d'aéronefs et instancie la liste des {@link Aeronef} simulés.
+ *
+ * <h2>Format attendu du fichier</h2>
+ * <pre>
+ * indicatif  idType  nbTours  tempsDepart_s
+ * F-ABCD     1       3        0
+ * F-WXYZ     2       2        120
+ * </pre>
+ * <ul>
+ *   <li>Colonnes séparées par des espaces (multiples acceptés).</li>
+ *   <li>{@code idType} doit correspondre à un identifiant présent dans la liste des types fournie.</li>
+ *   <li>{@code tempsDepart_s} est exprimé en secondes simulées depuis le début.</li>
+ *   <li>Les types inconnus et les lignes malformées sont ignorés (avertissement console).</li>
+ * </ul>
+ *
+ * @see Aeronef
+ * @see ParseurTypeAeronefs
+ */
 public class ParseurAeronefs {
 
+    /**
+     * Charge le fichier d'aéronefs en résolvant les types depuis la liste fournie.
+     *
+     * @param fichier fichier texte décrivant les aéronefs
+     * @param types   liste des types chargés au préalable (via {@link ParseurTypeAeronefs})
+     * @return liste des aéronefs prêts pour la simulation
+     * @throws IOException si le fichier ne peut pas être lu
+     */
     public static List<Aeronef> charger(File fichier,
                                         List<TypeAeronef> types) throws IOException {
         // Index types par id pour recherche rapide

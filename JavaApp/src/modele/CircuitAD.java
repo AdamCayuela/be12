@@ -8,34 +8,63 @@ import java.util.List;
 /**
  * Représente le circuit aérodrome complet, composé de phases A à K.
  *
- * On distingue trois variantes du circuit selon le moment du vol :
- *  - Premier tour  : inclut A (décollage depuis la piste), se termine par K (remise de gaz)
- *  - Tours du milieu : repart du point où K finit (entrée de B), se termine par K
- *  - Dernier tour  : repart de B, se termine par J (atterrissage)
+ * <p>Le circuit comporte trois variantes selon l'avancement du vol :</p>
+ * <ul>
+ *   <li><b>Premier tour</b> ({@code segmentsNormal}) : A (décollage) → B → … → I → K (remise de gaz)</li>
+ *   <li><b>Tours intermédiaires</b> ({@code segmentsLoop}) : B → … → I → K (sans A)</li>
+ *   <li><b>Dernier tour</b> ({@code segmentsFinal}) : B → … → I → J (atterrissage, sans A ni K)</li>
+ * </ul>
  *
- * Pourquoi trois listes et pas deux ?
- * K finit exactement où B commence. Si on remettait l'avion au début de A après K,
- * il redécollerait depuis la piste à chaque tour — ce qui n'est pas le comportement voulu.
+ * <p><b>Pourquoi trois listes ?</b> K se termine exactement là où B commence.
+ * Si l'avion repartait du début de A après chaque remise de gaz, il redécollerait
+ * depuis la piste à chaque tour — ce qui ne correspond pas au comportement réel.</p>
+ *
+ * @see Phase
+ * @see parseur.ParseurCircuit
+ * @see Aeronef#avancer(java.util.List, java.util.List, java.util.List, double, double)
  */
 public class CircuitAD {
 
-    /** Un segment = droite entre deux points consécutifs d'une phase. */
+    /**
+     * Segment rectiligne entre deux points consécutifs d'une phase.
+     *
+     * <p>La longueur est calculée une seule fois à la construction
+     * (distance euclidienne 3D entre {@code debut} et {@code fin}).</p>
+     */
     public static class Segment {
+        /** Point de départ du segment. */
         private final Point3D debut;
+        /** Point d'arrivée du segment. */
         private final Point3D fin;
+        /** Longueur du segment en mètres (distance euclidienne 3D). */
         private final double  longueur;
 
+        /**
+         * Construit un segment entre deux points.
+         * La longueur est calculée automatiquement.
+         *
+         * @param debut point de départ
+         * @param fin   point d'arrivée
+         */
         public Segment(Point3D debut, Point3D fin) {
             this.debut    = debut;
             this.fin      = fin;
             this.longueur = debut.distanceTo(fin);
         }
 
+        /** @return point de départ du segment */
         public Point3D getDebut()    { return debut;    }
+        /** @return point d'arrivée du segment */
         public Point3D getFin()      { return fin;      }
+        /** @return longueur du segment en mètres */
         public double  getLongueur() { return longueur; }
 
-        /** Retourne la position interpolée sur ce segment pour t ∈ [0, 1]. */
+        /**
+         * Retourne la position interpolée sur ce segment.
+         *
+         * @param t fraction du trajet ∈ [0, 1] (0 = début, 1 = fin)
+         * @return point 3D interpolé
+         */
         public Point3D positionA(double t) {
             return debut.interpoler(fin, t);
         }

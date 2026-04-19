@@ -6,15 +6,26 @@ import com.pi4j.io.gpio.digital.DigitalOutput;
 import com.pi4j.io.gpio.digital.DigitalState;
 
 /**
- * Contrôle les LEDs et le buzzer du Raspberry Pi via pi4j (provider gpiod).
- * Compatible RPi 5 / kernel 6.x.
+ * Contrôle les LEDs et le buzzer physiques du Raspberry Pi via pi4j (provider gpiod).
  *
- * Brochage physique → BCM :
- *   Broche 40 (BCM 21) → LED Verte  (RAS)
- *   Broche 38 (BCM 20) → LED Jaune  (proximité)
- *   Broche 36 (BCM 16) → LED Rouge  (conflit)
- *   Broche 37 (BCM 26) → Buzzer     (conflit)
- *   Broche 34           → GND
+ * <p>Compatible Raspberry Pi 5 / kernel Linux 6.x (utilise le driver {@code gpiod},
+ * le driver {@code sysfs} étant déprécié sur ce noyau).</p>
+ *
+ * <h2>Brochage physique → BCM</h2>
+ * <table border="1">
+ *   <tr><th>Broche physique</th><th>GPIO BCM</th><th>Rôle</th></tr>
+ *   <tr><td>40</td><td>BCM 21</td><td>LED Verte  — RAS (aucun conflit)</td></tr>
+ *   <tr><td>38</td><td>BCM 20</td><td>LED Jaune  — Proximité détectée</td></tr>
+ *   <tr><td>36</td><td>BCM 16</td><td>LED Rouge  — Conflit (alarme)</td></tr>
+ *   <tr><td>37</td><td>BCM 26</td><td>Buzzer     — Conflit actif</td></tr>
+ *   <tr><td>34</td><td>GND</td><td>Masse commune</td></tr>
+ * </table>
+ *
+ * <p>Si pi4j n'est pas disponible (exécution hors RPi), la classe se dégrade
+ * silencieusement : {@code disponible = false}, toutes les méthodes sont des no-ops.</p>
+ *
+ * @see modele.GestionnaireLCD
+ * @see controleur.ControleurPrincipal
  */
 public class GestionnaireLEDs {
 
@@ -53,11 +64,19 @@ public class GestionnaireLEDs {
     // ---------------------------------------------------------------
 
     /**
-     * Met à jour LEDs et buzzer selon la situation courante.
+     * Met à jour les LEDs et le buzzer en fonction de la situation courante.
      *
-     * @param conflit       vrai → LED rouge + buzzer ON
-     * @param proximite     vrai → LED jaune (seulement si pas de conflit)
-     * @param buzzerCoupe   vrai → buzzer physique silencieux même si conflit
+     * <p>Logique d'allumage :</p>
+     * <ul>
+     *   <li>Conflit → LED rouge allumée</li>
+     *   <li>Conflit ET buzzer non coupé → buzzer actif</li>
+     *   <li>Pas de conflit, proximité → LED jaune allumée</li>
+     *   <li>RAS (ni conflit ni proximité) → LED verte allumée</li>
+     * </ul>
+     *
+     * @param conflit     {@code true} si au moins une paire d'aéronefs est en conflit (distance ≤ seuil)
+     * @param proximite   {@code true} si au moins une paire est en approche (seuil &lt; dist ≤ 2×seuil)
+     * @param buzzerCoupe {@code true} si l'utilisateur a désactivé le buzzer dans l'interface
      */
     public void mettreAJour(boolean conflit, boolean proximite, boolean buzzerCoupe) {
         if (!disponible) return;
@@ -82,8 +101,8 @@ public class GestionnaireLEDs {
     }
 
     /**
-     * Éteint LEDs et buzzer.
-     * Appelé au stop (pas pause) et en fin de simulation.
+     * Éteint toutes les LEDs et le buzzer.
+     * Appelé à l'arrêt de la simulation (pas à la pause) et à la fermeture de l'application.
      */
     public void eteindreTout() {
         if (!disponible) return;
@@ -96,7 +115,8 @@ public class GestionnaireLEDs {
     }
 
     /**
-     * Libère le contexte pi4j à la fermeture de l'application.
+     * Éteint les LEDs/buzzer et libère le contexte pi4j.
+     * À appeler une seule fois, à la fermeture de l'application.
      */
     public void fermer() {
         eteindreTout();

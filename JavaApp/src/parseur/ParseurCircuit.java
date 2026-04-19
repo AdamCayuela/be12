@@ -11,8 +11,34 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Lit un fichier de circuit aérodrome et construit l'objet {@link CircuitAD}.
+ *
+ * <h2>Format attendu du fichier</h2>
+ * <p>Le fichier texte tabulé contient une ligne d'en-tête puis une ligne par phase :</p>
+ * <pre>
+ * idPhase  nomPhase  x1,y1,z1  x2,y2,z2  …
+ * A        Decollage  0,0,0  100,50,0  …
+ * B        Montee     100,50,0  200,100,0  …
+ * </pre>
+ * <ul>
+ *   <li>Les colonnes sont séparées par des espaces (multiples acceptés).</li>
+ *   <li>Chaque point est encodé {@code x,y,z} sans espace (virgule séparateur).</li>
+ *   <li>Les lignes malformées et les phases avec moins de 2 points sont ignorées.</li>
+ * </ul>
+ *
+ * @see CircuitAD
+ * @see Phase
+ */
 public class ParseurCircuit {
 
+    /**
+     * Charge le fichier de circuit et retourne le {@link CircuitAD} correspondant.
+     *
+     * @param fichier fichier texte décrivant le circuit aérodrome
+     * @return circuit aérodrome prêt à être utilisé par la simulation
+     * @throws IOException si le fichier ne peut pas être lu
+     */
     public static CircuitAD charger(File fichier) throws IOException {
         List<Phase> phases = new ArrayList<>();
 

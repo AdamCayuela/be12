@@ -9,17 +9,41 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Gère un écran LCD 2×16 HD44780 via adaptateur I2C PCF8574.
+ * Gère un écran LCD 2×16 caractères (HD44780) via adaptateur I2C PCF8574.
  *
- * Brochage RPi :
- *   Pin 3 (BCM 2) → SDA
- *   Pin 5 (BCM 3) → SCL
- *   Adresse I2C   → 0x27 (la plus courante, sinon 0x3F)
+ * <h2>Brochage Raspberry Pi</h2>
+ * <table border="1">
+ *   <tr><th>Broche physique</th><th>Signal</th></tr>
+ *   <tr><td>3 (BCM 2)</td><td>SDA (données I2C)</td></tr>
+ *   <tr><td>5 (BCM 3)</td><td>SCL (horloge I2C)</td></tr>
+ * </table>
+ * <p>Adresse I2C par défaut : {@code 0x27} (sinon {@code 0x3F} selon le module).</p>
  *
- * Tourne dans un thread dédié pour ne pas bloquer JavaFX.
- * Affichage :
- *   Ligne 1 : "TITI    - TOTO  "  (conflit) ou "   PROXIMITE    " ou "      RAS       "
- *   Ligne 2 : "Dist: 1234 m    "  (si conflit/proximite) ou vide
+ * <h2>Protocole</h2>
+ * <p>L'écran HD44780 est piloté en mode 4 bits via l'expandeur PCF8574 :
+ * chaque octet est envoyé en deux nibbles, chacun avec un pulse {@code Enable}.</p>
+ *
+ * <h2>Thread dédié</h2>
+ * <p>Les écritures LCD (qui peuvent durer plusieurs ms) se font dans un thread
+ * {@code daemon} pour ne pas bloquer le fil JavaFX. Le partage est assuré par
+ * des {@link java.util.concurrent.atomic.AtomicReference} et un drapeau
+ * {@link java.util.concurrent.atomic.AtomicBoolean}.</p>
+ *
+ * <h2>Contenu affiché</h2>
+ * <pre>
+ * Conflit   → Ligne 1 : "F-ABCD - F-WXYZ "
+ *             Ligne 2 : "Dist: 1234 m    "
+ * Proximité → Ligne 1 : "F-ABCD ~ F-WXYZ "
+ *             Ligne 2 : "Proxi:1234 m    "
+ * RAS       → Ligne 1 : "      RAS       "
+ *             Ligne 2 : "                "
+ * </pre>
+ *
+ * <p>Si pi4j n'est pas disponible (exécution hors RPi), la classe se dégrade
+ * silencieusement : toutes les méthodes publiques sont des no-ops.</p>
+ *
+ * @see GestionnaireLEDs
+ * @see controleur.ControleurPrincipal
  */
 public class GestionnaireLCD {
 
@@ -87,9 +111,15 @@ public class GestionnaireLCD {
     // ═══════════════════════════════════════════════════════════════════
 
     /**
-     * Affiche un conflit sur l'écran.
-     * Ligne 1 : "IND1    - IND2  "
-     * Ligne 2 : "Dist: 1234 m    "
+     * Affiche une situation de conflit (alarme rouge).
+     * <ul>
+     *   <li>Ligne 1 : {@code "IND1 - IND2     "} (indicatifs des deux aéronefs)</li>
+     *   <li>Ligne 2 : {@code "Dist: 1234 m    "} (distance de séparation)</li>
+     * </ul>
+     *
+     * @param ind1      indicatif du premier aéronef
+     * @param ind2      indicatif du second aéronef
+     * @param distanceM distance de séparation en mètres
      */
     public void afficherConflit(String ind1, String ind2, double distanceM) {
         if (!disponible) return;
@@ -99,9 +129,15 @@ public class GestionnaireLCD {
     }
 
     /**
-     * Affiche une proximité (pas encore alarme).
-     * Ligne 1 : "IND1  ~ IND2    "
-     * Ligne 2 : "Proxi: 1234 m   "
+     * Affiche une situation de proximité (alerte orange, pas encore alarme rouge).
+     * <ul>
+     *   <li>Ligne 1 : {@code "IND1 ~ IND2     "} (tilde indique l'approche)</li>
+     *   <li>Ligne 2 : {@code "Proxi:1234 m    "} (distance de séparation)</li>
+     * </ul>
+     *
+     * @param ind1      indicatif du premier aéronef
+     * @param ind2      indicatif du second aéronef
+     * @param distanceM distance de séparation en mètres
      */
     public void afficherProximite(String ind1, String ind2, double distanceM) {
         if (!disponible) return;
@@ -110,7 +146,13 @@ public class GestionnaireLCD {
         misAJour.set(true);
     }
 
-    /** Affiche RAS (aucun conflit ni proximité). */
+    /**
+     * Affiche l'état nominal RAS (aucun conflit ni proximité).
+     * <ul>
+     *   <li>Ligne 1 : {@code "      RAS       "}</li>
+     *   <li>Ligne 2 : vide</li>
+     * </ul>
+     */
     public void afficherRAS() {
         if (!disponible) return;
         ligne1Ref.set(formater("      RAS       ", 16));
@@ -118,7 +160,10 @@ public class GestionnaireLCD {
         misAJour.set(true);
     }
 
-    /** Arrête le thread et éteint l'écran. */
+    /**
+     * Arrête le thread d'affichage, efface l'écran et coupe le rétroéclairage.
+     * À appeler une seule fois à la fermeture de l'application.
+     */
     public void fermer() {
         actif.set(false);
         if (thread != null) thread.interrupt();

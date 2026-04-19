@@ -10,30 +10,64 @@ import javafx.application.Platform;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Gère 4 boutons poussoirs normalement ouverts via GPIO (pi4j).
- * Appuyé = LOW (pull-up interne activé).
+ * Gère 4 boutons poussoirs GPIO pour le déplacement de la caméra 3D.
  *
- * Brochage BCM :
- *   GPIO  1 → Droite  (EST)
- *   GPIO  7 → Bas     (SUD)
- *   GPIO  8 → Gauche  (OUEST)
- *   GPIO 25 → Haut    (NORD)
+ * <h2>Caractéristiques électriques</h2>
+ * <p>Boutons normalement ouverts + pull-up interne activé (pi4j) :
+ * repos = HIGH, appui = LOW.</p>
  *
- * À chaque appui maintenu, déplace la caméra en continu (toutes les 80 ms).
- * Met à jour les voyants UI via Platform.runLater.
+ * <h2>Brochage BCM</h2>
+ * <table border="1">
+ *   <tr><th>GPIO BCM</th><th>Direction</th><th>Point cardinal</th></tr>
+ *   <tr><td>1</td><td>Droite</td><td>EST</td></tr>
+ *   <tr><td>7</td><td>Bas</td><td>SUD</td></tr>
+ *   <tr><td>8</td><td>Gauche</td><td>OUEST</td></tr>
+ *   <tr><td>25</td><td>Haut</td><td>NORD</td></tr>
+ * </table>
+ *
+ * <h2>Comportement</h2>
+ * <p>Un thread de polling tourne toutes les 80 ms. Tant qu'un bouton est
+ * maintenu appuyé, la caméra se déplace de {@code STEP = 15 px} dans la
+ * direction correspondante (via {@link CameraCallback}).
+ * Les changements d'état (appui/relâchement) déclenchent une mise à jour
+ * des voyants de l'interface (via {@link VoyantCallback} et
+ * {@code Platform.runLater}).</p>
+ *
+ * <p>Si pi4j n'est pas disponible (exécution hors RPi), le constructeur
+ * échoue silencieusement et aucun thread n'est démarré.</p>
+ *
+ * @see controleur.ControleurPrincipal
+ * @see vue.VuePanneauControle
  */
 public class GestionnaireBoutons {
 
-    /** Callback appelé sur le thread FX pour déplacer la caméra. */
+    /**
+     * Callback appelé sur le thread JavaFX pour déplacer la caméra 3D.
+     * Implémenté par {@link controleur.ControleurPrincipal} via lambda.
+     */
     public interface CameraCallback {
+        /**
+         * Déplace la caméra du delta spécifié.
+         * @param dx déplacement horizontal (pixels FX)
+         * @param dz déplacement vertical / profondeur (pixels FX)
+         */
         void deplacer(double dx, double dz);
     }
 
-    /** Callback appelé sur le thread FX pour mettre à jour un voyant. */
+    /**
+     * Callback appelé sur le thread JavaFX pour mettre à jour un voyant de l'interface.
+     * Implémenté par {@link controleur.ControleurPrincipal} via lambda.
+     */
     public interface VoyantCallback {
+        /**
+         * Notifie l'interface du changement d'état d'un bouton.
+         * @param dir     direction du bouton concerné
+         * @param appuye  {@code true} si le bouton vient d'être appuyé, {@code false} s'il vient d'être relâché
+         */
         void setEtat(Direction dir, boolean appuye);
     }
 
+    /** Point cardinal correspondant à chacun des 4 boutons physiques. */
     public enum Direction { HAUT, BAS, GAUCHE, DROITE }
 
     private static final double STEP = 15.0; // pixels de déplacement caméra
@@ -51,6 +85,14 @@ public class GestionnaireBoutons {
     private CameraCallback cameraCallback;
     private VoyantCallback voyantCallback;
 
+    /**
+     * Initialise les entrées GPIO et démarre le thread de polling.
+     * Si pi4j n'est pas disponible, le constructeur se termine sans erreur
+     * et le thread n'est pas créé.
+     *
+     * @param cameraCallback callback JavaFX pour déplacer la caméra
+     * @param voyantCallback callback JavaFX pour allumer/éteindre les voyants du panneau
+     */
     public GestionnaireBoutons(CameraCallback cameraCallback, VoyantCallback voyantCallback) {
         this.cameraCallback = cameraCallback;
         this.voyantCallback = voyantCallback;
@@ -147,7 +189,10 @@ public class GestionnaireBoutons {
         );
     }
 
-    /** Arrête le thread et libère le contexte. */
+    /**
+     * Interrompt le thread de polling et libère le contexte pi4j.
+     * À appeler une seule fois à la fermeture de l'application.
+     */
     public void fermer() {
         actif.set(false);
         if (thread != null) thread.interrupt();

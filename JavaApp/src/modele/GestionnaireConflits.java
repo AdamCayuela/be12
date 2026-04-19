@@ -4,26 +4,56 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Détecte les conflits de proximité entre aéronefs actifs.
+ * Détecte et classe les situations de proximité entre aéronefs actifs.
+ *
+ * <p>Deux niveaux d'alerte sont distingués :</p>
+ * <ul>
+ *   <li><b>Conflit</b> (alarme rouge) : distance ≤ seuil → LED rouge + buzzer</li>
+ *   <li><b>Proximité</b> (alerte orange) : seuil &lt; distance ≤ 2×seuil → LED orange</li>
+ * </ul>
+ *
+ * <p>La distance seuil est configurable par l'utilisateur depuis le panneau
+ * de contrôle ou la fenêtre Paramètres (valeur par défaut : 400 m).</p>
+ *
+ * @see Simulation
+ * @see controleur.ControleurPrincipal
  */
 public class GestionnaireConflits {
 
-    /** Paire d'aéronefs en conflit avec leur distance. */
+    /**
+     * Représente une paire d'aéronefs en situation de proximité ou de conflit.
+     *
+     * <p>Immuable : créé à chaque appel de {@link GestionnaireConflits#detecter(java.util.List)}.</p>
+     */
     public static class Conflit {
+        /** Premier aéronef de la paire. */
         private final Aeronef a1;
+        /** Second aéronef de la paire. */
         private final Aeronef a2;
+        /** Distance 3D en mètres entre les deux aéronefs au moment de la détection. */
         private final double  distance;
 
+        /**
+         * Construit un conflit entre deux aéronefs.
+         *
+         * @param a1       premier aéronef
+         * @param a2       second aéronef
+         * @param distance distance 3D en mètres
+         */
         public Conflit(Aeronef a1, Aeronef a2, double distance) {
             this.a1       = a1;
             this.a2       = a2;
             this.distance = distance;
         }
 
+        /** @return premier aéronef de la paire */
         public Aeronef getA1()       { return a1;       }
+        /** @return second aéronef de la paire */
         public Aeronef getA2()       { return a2;       }
+        /** @return distance 3D en mètres entre les deux aéronefs */
         public double  getDistance() { return distance; }
 
+        /** @return représentation {@code "INDIC1 ↔ INDIC2 (dist m)"} */
         @Override
         public String toString() {
             return String.format("%s ↔ %s (%.0f m)",
@@ -33,23 +63,43 @@ public class GestionnaireConflits {
 
     // ---------------------------------------------------------------
 
-    private double        distanceSeuil;   // mètres — seuil d'alarme (LED rouge)
+    /** Distance d'alarme en mètres (LED rouge). Modifiable en cours de simulation. */
+    private double        distanceSeuil;
+    /** Paires en alarme : distance ≤ seuil → LED rouge + buzzer. */
     private List<Conflit> conflitsActuels = new ArrayList<>();
     /**
-     * Paires "proches" : distance comprise entre le seuil d'alarme et 2× ce seuil.
-     * Déclenche la LED orange (approche détectée, pas encore en alarme).
+     * Paires en approche : seuil &lt; distance ≤ 2×seuil → LED orange.
+     * Permet d'alerter les contrôleurs avant que la situation ne devienne critique.
      */
-    private List<Conflit> proximites       = new ArrayList<>();
+    private List<Conflit> proximites = new ArrayList<>();
 
+    /**
+     * Construit le gestionnaire avec une distance seuil initiale.
+     *
+     * @param distanceSeuil distance d'alarme en mètres (ex. 400)
+     */
     public GestionnaireConflits(double distanceSeuil) {
         this.distanceSeuil = distanceSeuil;
     }
 
-    public double        getDistanceSeuil()          { return distanceSeuil;    }
-    public void          setDistanceSeuil(double d)  { this.distanceSeuil = d;  }
-    public List<Conflit> getConflitsActuels()         { return conflitsActuels; }
-    /** Paires proches mais hors alarme (distance ∈ ]seuil, 2×seuil]). LED orange. */
-    public List<Conflit> getProximites()              { return proximites;       }
+    /** @return distance d'alarme actuelle en mètres */
+    public double        getDistanceSeuil()         { return distanceSeuil;   }
+
+    /**
+     * Modifie la distance d'alarme à la volée (prise en compte au tick suivant).
+     * @param d nouvelle distance en mètres
+     */
+    public void          setDistanceSeuil(double d) { this.distanceSeuil = d; }
+
+    /** @return liste des paires en alarme (distance ≤ seuil) après le dernier appel à {@link #detecter} */
+    public List<Conflit> getConflitsActuels()        { return conflitsActuels; }
+
+    /**
+     * Retourne les paires en approche (seuil &lt; distance ≤ 2×seuil) après le dernier appel à {@link #detecter}.
+     * Ces paires déclenchent la LED orange mais pas le buzzer.
+     * @return liste des proximités
+     */
+    public List<Conflit> getProximites()             { return proximites;      }
 
     /**
      * Analyse tous les aéronefs actifs et remplit deux listes :
@@ -84,7 +134,12 @@ public class GestionnaireConflits {
         return conflitsActuels;
     }
 
-    /** Retourne les indicatifs en conflit (pour colorer les sphères en rouge / orange ). */
+    /**
+     * Retourne les indicatifs des aéronefs actuellement en conflit (alarme rouge).
+     * Utilisé par la vue 3D pour colorer les sphères en rouge.
+     *
+     * @return liste d'indicatifs (sans doublons)
+     */
     public List<String> getIndicatifsEnConflit() {
         List<String> res = new ArrayList<>();
         for (Conflit c : conflitsActuels) {

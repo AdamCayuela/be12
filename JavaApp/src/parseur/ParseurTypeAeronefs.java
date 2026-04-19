@@ -10,8 +10,33 @@ import java.util.ArrayList;
 import java.util.List;
 
 
+/**
+ * Lit un fichier de types d'aéronefs et retourne la liste des {@link TypeAeronef}.
+ *
+ * <h2>Format attendu du fichier</h2>
+ * <pre>
+ * idTypeAeronef  nom     categorie  vitesse_kmh
+ * 1              A320    MEDIUM     850
+ * 2              C172    LIGHT      185
+ * </pre>
+ * <ul>
+ *   <li>Colonnes séparées par des espaces (multiples acceptés).</li>
+ *   <li>La ligne d'en-tête commençant par {@code idTypeAeronef} est ignorée.</li>
+ *   <li>Les catégories reconnues par la vue 3D : {@code LIGHT}, {@code MEDIUM}, {@code HIGH}.</li>
+ *   <li>Les lignes malformées sont silencieusement ignorées.</li>
+ * </ul>
+ *
+ * @see TypeAeronef
+ */
 public class ParseurTypeAeronefs {
 
+    /**
+     * Charge le fichier de types d'aéronefs.
+     *
+     * @param fichier fichier texte décrivant les types
+     * @return liste des types chargés (peut être vide si aucune ligne valide)
+     * @throws IOException si le fichier ne peut pas être lu
+     */
     public static List<TypeAeronef> charger(File fichier) throws IOException {
         List<TypeAeronef> types = new ArrayList<>();
 

@@ -57,6 +57,7 @@ public class MainController {
     private GestionnaireConflits gestConflits;
     private Simulation           simulation;
     private Thread               threadSimulation;
+    private modele.GestionnaireLEDs gestLEDs = new modele.GestionnaireLEDs();
     /** Durée estimée de la simulation en secondes, calculée au démarrage pour caler le slider sur 24h. */
     private double               dureeSimulation  = 1.0;
 
@@ -570,6 +571,9 @@ public class MainController {
 
                     if (verte)  panneauControle.allumerLed(panneauControle.ledVerte, "led-verte");
                     else        panneauControle.eteindreLed(panneauControle.ledVerte);
+
+                    // ── LEDs physiques RPi ───────────────────────────────────────
+                    gestLEDs.mettreAJour(rouge, orange);
                 }
 
                 // Si tous les avions ont atterri, la simulation s'est arrêtée d'elle-même
@@ -626,6 +630,7 @@ public class MainController {
             panneauControle.eteindreLed(panneauControle.ledJaune);
             panneauControle.eteindreLed(panneauControle.ledVerte);
         }
+        gestLEDs.eteindreTout();
         setStatut("Simulation arrêtée.");
     }
 
@@ -636,6 +641,7 @@ public class MainController {
         btnPause.setDisable(true);
         btnStop .setDisable(true);
         if (panneauControle != null) panneauControle.setConflits("terminé", "—");
+        gestLEDs.eteindreTout();
         setStatut("Simulation terminée — tous les aéronefs ont atterri.");
     }
 

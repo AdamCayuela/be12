@@ -92,10 +92,14 @@ public class GestionnaireLEDs {
     // ---------------------------------------------------------------
 
     private DigitalOutput creerSortie(int bcm, String id) {
-        DigitalOutput out = pi4j.digitalOutput().create(bcm);
-        out.config().initialState(DigitalState.LOW);
-        out.config().shutdownState(DigitalState.LOW);
-        return out;
+        var config = DigitalOutput.newConfigBuilder(pi4j)
+                .id(id)
+                .name(id)
+                .address(bcm)
+                .initial(DigitalState.LOW)
+                .shutdown(DigitalState.LOW)
+                .build();
+        return pi4j.create(config);
     }
 
     private void setState(DigitalOutput out, boolean allumer) {

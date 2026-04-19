@@ -47,8 +47,8 @@ public class PanneauControleController {
 
     // ── Section 5 : Buzzer ───────────────────────────────────────────────────
     Label  labelBuzzer;
-    Button btnCouperBuzzer;
-    private boolean buzzerCoupe = false;
+    Button btnToggleBuzzer;
+    private boolean buzzerActif = true; // activé par défaut
 
     // ── Section 6 : Conflits ─────────────────────────────────────────────────
     Label labelPremierVol;
@@ -307,20 +307,13 @@ public class PanneauControleController {
         labelBuzzer = new Label("🔇");
         labelBuzzer.getStyleClass().add("buzzer-icon");
 
-        btnCouperBuzzer = new Button("🔕 Couper");
-        btnCouperBuzzer.setDisable(true); // actif seulement quand le buzzer sonne
-        btnCouperBuzzer.setOnAction(e -> {
-            buzzerCoupe = !buzzerCoupe;
-            if (buzzerCoupe) {
-                btnCouperBuzzer.setText("🔊 Réactiver");
-                labelBuzzer.setText("🔕");
-            } else {
-                btnCouperBuzzer.setText("🔕 Couper");
-                // l'icône sera remise à jour au prochain tick
-            }
+        btnToggleBuzzer = new Button("Désactiver");
+        btnToggleBuzzer.setOnAction(e -> {
+            buzzerActif = !buzzerActif;
+            btnToggleBuzzer.setText(buzzerActif ? "Désactiver" : "Activer");
         });
 
-        HBox ligne = new HBox(10, labelBuzzer, btnCouperBuzzer);
+        HBox ligne = new HBox(10, labelBuzzer, btnToggleBuzzer);
         ligne.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
 
         VBox content = new VBox(8, titre, ligne);
@@ -418,8 +411,8 @@ public class PanneauControleController {
             voyant.getStyleClass().add("voyant-off");
     }
 
-    /** Retourne vrai si l'utilisateur a coupé le buzzer manuellement. */
-    public boolean isBuzzerCoupe() { return buzzerCoupe; }
+    /** Retourne vrai si le buzzer est activé par l'utilisateur. */
+    public boolean isBuzzerActif() { return buzzerActif; }
 
     /**
      * Met à jour l'icône et le bouton buzzer.
@@ -427,15 +420,7 @@ public class PanneauControleController {
      * actif=false → pas de conflit    → 🔇, bouton désactivé, reset coupe
      */
     public void setBuzzerActif(boolean actif) {
-        if (actif) {
-            labelBuzzer.setText("🔊");
-            btnCouperBuzzer.setDisable(false);
-        } else {
-            labelBuzzer.setText("🔇");
-            btnCouperBuzzer.setDisable(true);
-            btnCouperBuzzer.setText("🔕 Couper");
-            buzzerCoupe = false;
-        }
+        labelBuzzer.setText(actif ? "🔊" : "🔇");
     }
 
     /** Met à jour l'écran LCD de conflits. */

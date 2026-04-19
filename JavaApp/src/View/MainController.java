@@ -577,8 +577,8 @@ public class MainController {
                     panneauControle.setBuzzerActif(rouge);
 
                     // ── LEDs + buzzer physiques RPi ──────────────────────────────
-                    boolean buzzerCoupe = panneauControle.isBuzzerCoupe();
-                    gestLEDs.mettreAJour(rouge, orange, buzzerCoupe);
+                    boolean buzzerOn = panneauControle.isBuzzerActif();
+                    gestLEDs.mettreAJour(rouge, orange, !buzzerOn);
 
                     // ── LCD I2C ──────────────────────────────────────────────────
                     if (rouge && !conflits.isEmpty()) {

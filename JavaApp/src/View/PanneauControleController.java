@@ -423,18 +423,18 @@ public class PanneauControleController {
 
     /**
      * Met à jour l'icône et le bouton buzzer.
-     * actif=true  → conflit en cours  → 🔊 (ou 🔕 si coupé)
+     * actif=true  → conflit en cours  → 🔊, bouton Couper actif
      * actif=false → pas de conflit    → 🔇, bouton désactivé, reset coupe
      */
     public void setBuzzerActif(boolean actif) {
         if (actif) {
-            labelBuzzer.setText(buzzerCoupe ? "🔕" : "🔊");
+            labelBuzzer.setText("🔊");
             btnCouperBuzzer.setDisable(false);
         } else {
             labelBuzzer.setText("🔇");
             btnCouperBuzzer.setDisable(true);
             btnCouperBuzzer.setText("🔕 Couper");
-            buzzerCoupe = false; // reset à chaque fin de conflit
+            buzzerCoupe = false;
         }
     }
 

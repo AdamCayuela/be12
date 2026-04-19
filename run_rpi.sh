@@ -8,7 +8,7 @@ JAVA=/opt/java23/bin/java
 JAVAC=/opt/java23/bin/javac
 JAVAFX=/opt/javafx-25/lib
 PI4J=/opt/pi4j/lib
-LIB=/home/cayuelad/libs/JavaFX17_Obj.jar
+LIB=/opt/libs/JavaFX17_Obj.jar
 SRC=~/be12/JavaApp/src
 OUT=~/be12/out
 

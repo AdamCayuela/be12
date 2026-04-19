@@ -14,35 +14,39 @@ import com.pi4j.io.gpio.digital.DigitalState;
  *   Broche 38 (BCM 20) → LED Jaune  (proximité)
  *   Broche 36 (BCM 16) → LED Rouge  (conflit)
  *   Broche 34           → GND
- *
- * Si pi4j n'est pas disponible (ex: exécution sur Mac),
- * la classe se désactive silencieusement.
  */
 public class GestionnaireLEDs {
 
-    private static final int PIN_VERT  = 21; // physique 40
-    private static final int PIN_JAUNE = 20; // physique 38
-    private static final int PIN_ROUGE = 16; // physique 36
-
     private Context       pi4j      = null;
-    private DigitalOutput ledVert   = null;
-    private DigitalOutput ledJaune  = null;
-    private DigitalOutput ledRouge  = null;
+    private DigitalOutput ledVert   = null;  // BCM 21 - physique 40
+    private DigitalOutput ledJaune  = null;  // BCM 20 - physique 38
+    private DigitalOutput ledRouge  = null;  // BCM 16 - physique 36
     private boolean       disponible = false;
 
     public GestionnaireLEDs() {
         try {
             pi4j = Pi4J.newAutoContext();
 
-            ledVert  = creerSortie(PIN_VERT,  "led-verte");
-            ledJaune = creerSortie(PIN_JAUNE, "led-jaune");
-            ledRouge = creerSortie(PIN_ROUGE, "led-rouge");
+            // ── Initialisation des broches ───────────────────────────────
+            ledVert  = pi4j.digitalOutput().create(21);
+            ledVert.config().initialState(DigitalState.LOW);
+            ledVert.config().shutdownState(DigitalState.LOW);
 
-            // Éteindre toutes les LEDs au démarrage
-            eteindreTout();
+            ledJaune = pi4j.digitalOutput().create(20);
+            ledJaune.config().initialState(DigitalState.LOW);
+            ledJaune.config().shutdownState(DigitalState.LOW);
+
+            ledRouge = pi4j.digitalOutput().create(16);
+            ledRouge.config().initialState(DigitalState.LOW);
+            ledRouge.config().shutdownState(DigitalState.LOW);
+
+            // ── Éteindre toutes les LEDs au démarrage ───────────────────
+            ledVert .low();
+            ledJaune.low();
+            ledRouge.low();
 
             disponible = true;
-            System.out.println("[LED] pi4j initialisé — LEDs prêtes.");
+            System.out.println("[LED] pi4j initialisé — LEDs prêtes (BCM 21/20/16).");
         } catch (Exception e) {
             System.out.println("[LED] pi4j non disponible (hors RPi ?) : " + e.getMessage());
         }
@@ -55,15 +59,25 @@ public class GestionnaireLEDs {
     /**
      * Met à jour l'état des trois LEDs selon la situation courante.
      *
-     * @param conflit   vrai si au moins une paire est en alarme    → LED rouge
-     * @param proximite vrai si au moins une paire est en approche  → LED jaune
+     * @param conflit   vrai → LED rouge allumée
+     * @param proximite vrai → LED jaune allumée
+     *                  aucun des deux → LED verte allumée
      */
     public void mettreAJour(boolean conflit, boolean proximite) {
         if (!disponible) return;
         try {
-            setState(ledRouge,  conflit);
-            setState(ledJaune, !conflit && proximite);
-            setState(ledVert,  !conflit && !proximite);
+            // LED Rouge (conflit)
+            if (conflit) ledRouge.high();
+            else         ledRouge.low();
+
+            // LED Jaune (proximité, seulement si pas de conflit)
+            if (!conflit && proximite) ledJaune.high();
+            else                       ledJaune.low();
+
+            // LED Verte (RAS)
+            if (!conflit && !proximite) ledVert.high();
+            else                        ledVert.low();
+
         } catch (Exception ignored) {}
     }
 
@@ -72,9 +86,12 @@ public class GestionnaireLEDs {
      * Appelé au stop (pas pause) et en fin de simulation.
      */
     public void eteindreTout() {
-        if (ledVert  != null) try { ledVert .low(); } catch (Exception ignored) {}
-        if (ledJaune != null) try { ledJaune.low(); } catch (Exception ignored) {}
-        if (ledRouge != null) try { ledRouge.low(); } catch (Exception ignored) {}
+        if (!disponible) return;
+        try {
+            ledVert .low();
+            ledJaune.low();
+            ledRouge.low();
+        } catch (Exception ignored) {}
     }
 
     /**
@@ -85,26 +102,5 @@ public class GestionnaireLEDs {
         if (pi4j != null) {
             try { pi4j.shutdown(); } catch (Exception ignored) {}
         }
-    }
-
-    // ---------------------------------------------------------------
-    // Utilitaires
-    // ---------------------------------------------------------------
-
-    private DigitalOutput creerSortie(int bcm, String id) {
-        var config = DigitalOutput.newConfigBuilder(pi4j)
-                .id(id)
-                .name(id)
-                .address(bcm)
-                .initial(DigitalState.LOW)
-                .shutdown(DigitalState.LOW)
-                .build();
-        return pi4j.create(config);
-    }
-
-    private void setState(DigitalOutput out, boolean allumer) {
-        if (out == null) return;
-        if (allumer) out.high();
-        else         out.low();
     }
 }

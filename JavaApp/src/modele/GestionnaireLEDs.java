@@ -1,12 +1,8 @@
 package modele;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-
 /**
- * Contrôle les LEDs physiques du Raspberry Pi via l'interface sysfs GPIO.
- * Aucune dépendance externe requise.
+ * Contrôle les LEDs physiques du Raspberry Pi via la commande pinctrl.
+ * Compatible RPi 5 / kernel 6.x (sysfs GPIO déprécié sur ces versions).
  *
  * Brochage physique → BCM :
  *   Broche 40 (BCM 21) → LED Verte  (RAS)
@@ -14,14 +10,11 @@ import java.nio.file.Path;
  *   Broche 36 (BCM 16) → LED Rouge  (conflit)
  *   Broche 34           → GND
  *
- * Si le GPIO n'est pas disponible (ex: exécution sur Mac),
+ * Si pinctrl n'est pas disponible (ex: exécution sur Mac),
  * la classe se désactive silencieusement.
  */
 public class GestionnaireLEDs {
 
-    private static final String GPIO_ROOT = "/sys/class/gpio";
-
-    // BCM pin numbers
     private static final int PIN_VERT  = 21; // physique 40
     private static final int PIN_JAUNE = 20; // physique 38
     private static final int PIN_ROUGE = 16; // physique 36
@@ -30,13 +23,14 @@ public class GestionnaireLEDs {
 
     public GestionnaireLEDs() {
         try {
-            initPin(PIN_VERT);
-            initPin(PIN_JAUNE);
-            initPin(PIN_ROUGE);
+            // Initialiser les 3 broches en sortie éteintes
+            pinctrl(PIN_VERT,  false);
+            pinctrl(PIN_JAUNE, false);
+            pinctrl(PIN_ROUGE, false);
             disponible = true;
-            System.out.println("[LED] GPIO initialisé — LEDs prêtes.");
+            System.out.println("[LED] pinctrl initialisé — LEDs prêtes.");
         } catch (Exception e) {
-            System.out.println("[LED] GPIO non disponible (hors RPi ?) : " + e.getMessage());
+            System.out.println("[LED] pinctrl non disponible (hors RPi ?) : " + e.getMessage());
         }
     }
 
@@ -47,47 +41,40 @@ public class GestionnaireLEDs {
     /**
      * Met à jour l'état des trois LEDs selon la situation courante.
      *
-     * @param conflit   vrai si au moins une paire est en alarme (LED rouge)
-     * @param proximite vrai si au moins une paire est proche mais hors alarme (LED jaune)
+     * @param conflit   vrai si au moins une paire est en alarme    → LED rouge
+     * @param proximite vrai si au moins une paire est en approche  → LED jaune
      */
     public void mettreAJour(boolean conflit, boolean proximite) {
         if (!disponible) return;
         try {
-            ecrire(PIN_ROUGE,  conflit               ? 1 : 0);
-            ecrire(PIN_JAUNE, !conflit && proximite   ? 1 : 0);
-            ecrire(PIN_VERT,  !conflit && !proximite  ? 1 : 0);
-        } catch (Exception e) {
-            // Erreur GPIO non bloquante
-        }
+            pinctrl(PIN_ROUGE,  conflit);
+            pinctrl(PIN_JAUNE, !conflit && proximite);
+            pinctrl(PIN_VERT,  !conflit && !proximite);
+        } catch (Exception ignored) {}
     }
 
     /** Éteint toutes les LEDs (arrêt ou fin de simulation). */
     public void eteindreTout() {
         if (!disponible) return;
         try {
-            ecrire(PIN_VERT,  0);
-            ecrire(PIN_JAUNE, 0);
-            ecrire(PIN_ROUGE, 0);
+            pinctrl(PIN_VERT,  false);
+            pinctrl(PIN_JAUNE, false);
+            pinctrl(PIN_ROUGE, false);
         } catch (Exception ignored) {}
     }
 
     // ---------------------------------------------------------------
-    // Initialisation GPIO sysfs
+    // Commande pinctrl
     // ---------------------------------------------------------------
 
-    private void initPin(int bcm) throws IOException {
-        Path pinDir = Path.of(GPIO_ROOT + "/gpio" + bcm);
-        if (!Files.exists(pinDir)) {
-            Files.writeString(Path.of(GPIO_ROOT + "/export"), String.valueOf(bcm));
-            // Laisser le temps au kernel de créer l'entrée sysfs
-            try { Thread.sleep(100); } catch (InterruptedException ignored) {}
-        }
-        Files.writeString(pinDir.resolve("direction"), "out");
-        ecrire(bcm, 0); // LED éteinte par défaut
-    }
-
-    private void ecrire(int bcm, int valeur) throws IOException {
-        Files.writeString(Path.of(GPIO_ROOT + "/gpio" + bcm + "/value"),
-                String.valueOf(valeur));
+    /**
+     * Appelle : pinctrl set <bcm> op dh   (output high = LED allumée)
+     *       ou : pinctrl set <bcm> op dl   (output low  = LED éteinte)
+     */
+    private void pinctrl(int bcm, boolean allumer) throws Exception {
+        String etat = allumer ? "dh" : "dl";
+        Process p = Runtime.getRuntime().exec(
+                new String[]{"pinctrl", "set", String.valueOf(bcm), "op", etat});
+        p.waitFor();
     }
 }

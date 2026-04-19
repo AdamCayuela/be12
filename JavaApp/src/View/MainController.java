@@ -573,8 +573,12 @@ public class MainController {
                     if (verte)  panneauControle.allumerLed(panneauControle.ledVerte, "led-verte");
                     else        panneauControle.eteindreLed(panneauControle.ledVerte);
 
-                    // ── LEDs physiques RPi ───────────────────────────────────────
-                    gestLEDs.mettreAJour(rouge, orange);
+                    // ── Icône buzzer logiciel ────────────────────────────────────
+                    panneauControle.setBuzzerActif(rouge);
+
+                    // ── LEDs + buzzer physiques RPi ──────────────────────────────
+                    boolean buzzerCoupe = panneauControle.isBuzzerCoupe();
+                    gestLEDs.mettreAJour(rouge, orange, buzzerCoupe);
 
                     // ── LCD I2C ──────────────────────────────────────────────────
                     if (rouge && !conflits.isEmpty()) {

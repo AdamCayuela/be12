@@ -55,16 +55,20 @@ public class GestionnaireLEDs {
     /**
      * Met à jour LEDs et buzzer selon la situation courante.
      *
-     * @param conflit   vrai → LED rouge + buzzer ON
-     * @param proximite vrai → LED jaune (seulement si pas de conflit)
-     *                  aucun des deux → LED verte
+     * @param conflit       vrai → LED rouge + buzzer ON
+     * @param proximite     vrai → LED jaune (seulement si pas de conflit)
+     * @param buzzerCoupe   vrai → buzzer physique silencieux même si conflit
      */
-    public void mettreAJour(boolean conflit, boolean proximite) {
+    public void mettreAJour(boolean conflit, boolean proximite, boolean buzzerCoupe) {
         if (!disponible) return;
         try {
-            // LED Rouge + Buzzer (conflit)
-            if (conflit) { ledRouge.high(); buzzer.high(); }
-            else         { ledRouge.low();  buzzer.low();  }
+            // LED Rouge (conflit)
+            if (conflit) ledRouge.high();
+            else         ledRouge.low();
+
+            // Buzzer (conflit ET non coupé)
+            if (conflit && !buzzerCoupe) buzzer.high();
+            else                         buzzer.low();
 
             // LED Jaune (proximité, seulement si pas de conflit)
             if (!conflit && proximite) ledJaune.high();

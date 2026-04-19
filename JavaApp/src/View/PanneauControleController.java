@@ -46,7 +46,9 @@ public class PanneauControleController {
     Circle voyantEst;
 
     // ── Section 5 : Buzzer ───────────────────────────────────────────────────
-    Label labelBuzzer;
+    Label  labelBuzzer;
+    Button btnCouperBuzzer;
+    private boolean buzzerCoupe = false;
 
     // ── Section 6 : Conflits ─────────────────────────────────────────────────
     Label labelPremierVol;
@@ -305,9 +307,25 @@ public class PanneauControleController {
         labelBuzzer = new Label("🔇");
         labelBuzzer.getStyleClass().add("buzzer-icon");
 
-        VBox content = new VBox(8, titre, labelBuzzer);
+        btnCouperBuzzer = new Button("🔕 Couper");
+        btnCouperBuzzer.setDisable(true); // actif seulement quand le buzzer sonne
+        btnCouperBuzzer.setOnAction(e -> {
+            buzzerCoupe = !buzzerCoupe;
+            if (buzzerCoupe) {
+                btnCouperBuzzer.setText("🔊 Réactiver");
+                labelBuzzer.setText("🔕");
+            } else {
+                btnCouperBuzzer.setText("🔕 Couper");
+                // l'icône sera remise à jour au prochain tick
+            }
+        });
+
+        HBox ligne = new HBox(10, labelBuzzer, btnCouperBuzzer);
+        ligne.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+
+        VBox content = new VBox(8, titre, ligne);
         content.setPadding(new Insets(8));
-        content.setAlignment(Pos.CENTER);
+        content.setAlignment(Pos.CENTER_LEFT);
 
         return sectionPane("Gestion du buzzer", content, "section-buzzer");
     }
@@ -400,9 +418,24 @@ public class PanneauControleController {
             voyant.getStyleClass().add("voyant-off");
     }
 
-    /** Affiche le buzzer actif (🔊) ou muet (🔇). */
+    /** Retourne vrai si l'utilisateur a coupé le buzzer manuellement. */
+    public boolean isBuzzerCoupe() { return buzzerCoupe; }
+
+    /**
+     * Met à jour l'icône et le bouton buzzer.
+     * actif=true  → conflit en cours  → 🔊 (ou 🔕 si coupé)
+     * actif=false → pas de conflit    → 🔇, bouton désactivé, reset coupe
+     */
     public void setBuzzerActif(boolean actif) {
-        labelBuzzer.setText(actif ? "🔊" : "🔇");
+        if (actif) {
+            labelBuzzer.setText(buzzerCoupe ? "🔕" : "🔊");
+            btnCouperBuzzer.setDisable(false);
+        } else {
+            labelBuzzer.setText("🔇");
+            btnCouperBuzzer.setDisable(true);
+            btnCouperBuzzer.setText("🔕 Couper");
+            buzzerCoupe = false; // reset à chaque fin de conflit
+        }
     }
 
     /** Met à jour l'écran LCD de conflits. */

@@ -57,8 +57,9 @@ public class MainController {
     private GestionnaireConflits gestConflits;
     private Simulation           simulation;
     private Thread               threadSimulation;
-    private modele.GestionnaireLEDs gestLEDs = new modele.GestionnaireLEDs();
-    private modele.GestionnaireLCD  gestLCD  = new modele.GestionnaireLCD();
+    private modele.GestionnaireLEDs    gestLEDs    = new modele.GestionnaireLEDs();
+    private modele.GestionnaireLCD     gestLCD     = new modele.GestionnaireLCD();
+    private modele.GestionnaireBoutons gestBoutons = null; // init après buildScene (vue3D requis)
     /** Durée estimée de la simulation en secondes, calculée au démarrage pour caler le slider sur 24h. */
     private double               dureeSimulation  = 1.0;
 
@@ -117,6 +118,24 @@ public class MainController {
             vue3D = new Vue3DController();
             vue3D.initialiser(conteneur3D);
             panneauControle.setVue3DController(vue3D);
+
+            // Init boutons GPIO physiques (après vue3D)
+            gestBoutons = new modele.GestionnaireBoutons(
+                (dx, dz) -> { if (vue3D != null) vue3D.deplacerCamera(dx, dz); },
+                (dir, appuye) -> {
+                    if (panneauControle == null) return;
+                    switch (dir) {
+                        case HAUT   -> { if (appuye) panneauControle.activerVoyant(panneauControle.voyantNord);
+                                         else        panneauControle.desactiverVoyant(panneauControle.voyantNord); }
+                        case BAS    -> { if (appuye) panneauControle.activerVoyant(panneauControle.voyantSud);
+                                         else        panneauControle.desactiverVoyant(panneauControle.voyantSud); }
+                        case GAUCHE -> { if (appuye) panneauControle.activerVoyant(panneauControle.voyantOuest);
+                                         else        panneauControle.desactiverVoyant(panneauControle.voyantOuest); }
+                        case DROITE -> { if (appuye) panneauControle.activerVoyant(panneauControle.voyantEst);
+                                         else        panneauControle.desactiverVoyant(panneauControle.voyantEst); }
+                    }
+                }
+            );
         });
 
         // Demander confirmation avant de fermer via la croix
@@ -683,6 +702,7 @@ public class MainController {
                 if (simulation != null) simulation.arreter();
                 gestLEDs.fermer();
                 gestLCD.fermer();
+                if (gestBoutons != null) gestBoutons.fermer();
                 Platform.exit();
             }
         });

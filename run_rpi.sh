@@ -30,8 +30,10 @@ echo ">>> Copie des ressources..."
 cp -r $SRC/resources $OUT/resources
 
 echo ">>> Lancement..."
+export EGL_PLATFORM=x11
 $JAVA \
   -Dprism.order=es2 \
+  -Dprism.forceGPU=true \
   --module-path $JAVAFX \
   --add-modules javafx.controls,javafx.fxml,javafx.graphics \
   -cp $OUT:$LIB \

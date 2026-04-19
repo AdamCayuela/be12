@@ -353,6 +353,8 @@ public class Vue3DController {
                                    List<GestionnaireConflits.Conflit> conflits,
                                    List<GestionnaireConflits.Conflit> proximites) {
 
+        if (aeronefs == null || conflits == null || proximites == null) return;
+
         // Indicatifs en conflit (rouge) et en proximité (orange)
         List<String> enConflit  = new ArrayList<>();
         List<String> enProximite = new ArrayList<>();

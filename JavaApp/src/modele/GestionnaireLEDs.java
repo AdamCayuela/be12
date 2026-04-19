@@ -6,13 +6,14 @@ import com.pi4j.io.gpio.digital.DigitalOutput;
 import com.pi4j.io.gpio.digital.DigitalState;
 
 /**
- * Contrôle les LEDs physiques du Raspberry Pi via pi4j (provider gpiod).
+ * Contrôle les LEDs et le buzzer du Raspberry Pi via pi4j (provider gpiod).
  * Compatible RPi 5 / kernel 6.x.
  *
  * Brochage physique → BCM :
  *   Broche 40 (BCM 21) → LED Verte  (RAS)
  *   Broche 38 (BCM 20) → LED Jaune  (proximité)
  *   Broche 36 (BCM 16) → LED Rouge  (conflit)
+ *   Broche 37 (BCM 26) → Buzzer     (conflit)
  *   Broche 34           → GND
  */
 public class GestionnaireLEDs {
@@ -21,6 +22,7 @@ public class GestionnaireLEDs {
     private DigitalOutput ledVert   = null;  // BCM 21 - physique 40
     private DigitalOutput ledJaune  = null;  // BCM 20 - physique 38
     private DigitalOutput ledRouge  = null;  // BCM 16 - physique 36
+    private DigitalOutput buzzer    = null;  // BCM 26 - physique 37
     private boolean       disponible = false;
 
     public GestionnaireLEDs() {
@@ -31,14 +33,16 @@ public class GestionnaireLEDs {
             ledVert  = pi4j.digitalOutput().create(21); // physique 40
             ledJaune = pi4j.digitalOutput().create(20); // physique 38
             ledRouge = pi4j.digitalOutput().create(16); // physique 36
+            buzzer   = pi4j.digitalOutput().create(26); // physique 37
 
-            // ── Éteindre toutes les LEDs au démarrage ───────────────────
+            // ── Tout éteindre au démarrage ───────────────────────────────
             ledVert .low();
             ledJaune.low();
             ledRouge.low();
+            buzzer  .low();
 
             disponible = true;
-            System.out.println("[LED] pi4j initialisé — LEDs prêtes (BCM 21/20/16).");
+            System.out.println("[LED] pi4j initialisé — LEDs + buzzer prêts (BCM 21/20/16/26).");
         } catch (Exception e) {
             System.out.println("[LED] pi4j non disponible (hors RPi ?) : " + e.getMessage());
         }
@@ -49,18 +53,18 @@ public class GestionnaireLEDs {
     // ---------------------------------------------------------------
 
     /**
-     * Met à jour l'état des trois LEDs selon la situation courante.
+     * Met à jour LEDs et buzzer selon la situation courante.
      *
-     * @param conflit   vrai → LED rouge allumée
-     * @param proximite vrai → LED jaune allumée
-     *                  aucun des deux → LED verte allumée
+     * @param conflit   vrai → LED rouge + buzzer ON
+     * @param proximite vrai → LED jaune (seulement si pas de conflit)
+     *                  aucun des deux → LED verte
      */
     public void mettreAJour(boolean conflit, boolean proximite) {
         if (!disponible) return;
         try {
-            // LED Rouge (conflit)
-            if (conflit) ledRouge.high();
-            else         ledRouge.low();
+            // LED Rouge + Buzzer (conflit)
+            if (conflit) { ledRouge.high(); buzzer.high(); }
+            else         { ledRouge.low();  buzzer.low();  }
 
             // LED Jaune (proximité, seulement si pas de conflit)
             if (!conflit && proximite) ledJaune.high();
@@ -74,7 +78,7 @@ public class GestionnaireLEDs {
     }
 
     /**
-     * Éteint toutes les LEDs.
+     * Éteint LEDs et buzzer.
      * Appelé au stop (pas pause) et en fin de simulation.
      */
     public void eteindreTout() {
@@ -83,6 +87,7 @@ public class GestionnaireLEDs {
             ledVert .low();
             ledJaune.low();
             ledRouge.low();
+            buzzer  .low();
         } catch (Exception ignored) {}
     }
 

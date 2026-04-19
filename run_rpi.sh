@@ -2,6 +2,12 @@
 # ============================================================
 # Script de compilation et lancement - Simulation Tour de Piste
 # Raspberry Pi - Java 23 + JavaFX 25 + pi4j (gpiod)
+#
+# Architecture MVC :
+#   src/modele/     → logique métier (Simulation, Aeronef…)
+#   src/vue/        → vues JavaFX (Vue3D, VuePanneauControle)
+#   src/controleur/ → contrôleur principal (ControleurPrincipal)
+#   src/parseur/    → parseurs de fichiers
 # ============================================================
 
 JAVA=/opt/java23/bin/java

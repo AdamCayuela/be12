@@ -1,0 +1,16 @@
+# Matériaux avion low-poly
+
+newmtl fuselage
+Kd 0.75 0.78 0.82
+Ks 0.40 0.40 0.40
+Ns 40
+
+newmtl ailes
+Kd 0.65 0.68 0.72
+Ks 0.30 0.30 0.30
+Ns 30
+
+newmtl derives
+Kd 0.70 0.72 0.76
+Ks 0.30 0.30 0.30
+Ns 30

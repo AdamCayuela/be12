@@ -1,4 +1,4 @@
-package View;
+package controleur;
 
 import javafx.application.Platform;
 import javafx.geometry.Insets;
@@ -14,56 +14,59 @@ import modele.*;
 import parseur.ParseurAeronefs;
 import parseur.ParseurCircuit;
 import parseur.ParseurTypeAeronefs;
+import vue.Vue3D;
+import vue.VuePanneauControle;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
 
 /**
- * Contrôleur principal de l'application.
- * Construit toute la fenêtre en Java pur (pas de FXML) et orchestre
- * les interactions entre l'interface, la simulation et la vue 3D.
+ * CONTRÔLEUR PRINCIPAL de l'application.
  *
- * Ce qu'il gère :
- *  - Chargement des fichiers (circuit, types d'aéronefs, aéronefs)
- *  - Démarrage / pause / arrêt / reprise de la simulation
- *  - Timeline : slider 0-24h, seek, sélecteur de vitesse
- *  - Mise à jour de la vue 3D et du panneau de conflits à chaque tick
- *  - Menus caméra, paramètres et à propos
+ * Responsabilité MVC : contrôleur.
+ *   - Reçoit les événements utilisateur (menus, boutons, slider).
+ *   - Traduit ces événements en actions sur le modèle (Simulation).
+ *   - Le modèle (Simulation) notifie ce contrôleur via TickListener.
+ *   - Le contrôleur met ensuite à jour les vues (Vue3D, VuePanneauControle).
+ *
+ * Cycle MVC à chaque tick :
+ *   Simulation (modèle) → onTick() → ControleurPrincipal → rafraichirAeronefs() → Vue3D
+ *                                                         → setConflits()        → VuePanneauControle
+ *                                                         → mettreAJour()        → GestionnaireLEDs / LCD
  */
-public class MainController {
+public class ControleurPrincipal {
 
     private final Stage stage;
 
-    // fichiers chargés par l'utilisateur
+    // ── Fichiers chargés ─────────────────────────────────────────────────────
     private File fichierCircuit;
     private File fichierTypes;
     private File fichierAeronefs;
-    /** Modèle 3D .obj global (fallback). null = sphères. */
     private File fichierModele3D;
-    /** Modèle .obj par nom de type aéronef (prioritaire sur le global). */
     private final java.util.Map<String, File> modeles3DParType = new java.util.HashMap<>();
-    /** Types parsés immédiatement après chargement du fichier, pour alimenter le menu. */
     private List<TypeAeronef> typesCharges = new java.util.ArrayList<>();
 
-    // état courant de la simulation (arrêtée, en cours, en pause)
+    // ── État de la simulation ────────────────────────────────────────────────
     private enum EtatSimulation { ARRET, EN_COURS, PAUSE }
     private EtatSimulation etat = EtatSimulation.ARRET;
 
-    // objets du modèle de simulation
+    // ── Modèle ───────────────────────────────────────────────────────────────
     private CircuitAD            circuit;
     private List<TypeAeronef>    types;
     private List<Aeronef>        aeronefs;
     private GestionnaireConflits gestConflits;
     private Simulation           simulation;
     private Thread               threadSimulation;
+
+    // ── Matériel RPi ─────────────────────────────────────────────────────────
     private modele.GestionnaireLEDs    gestLEDs    = new modele.GestionnaireLEDs();
     private modele.GestionnaireLCD     gestLCD     = new modele.GestionnaireLCD();
-    private modele.GestionnaireBoutons gestBoutons = null; // init après buildScene (vue3D requis)
-    /** Durée estimée de la simulation en secondes, calculée au démarrage pour caler le slider sur 24h. */
-    private double               dureeSimulation  = 1.0;
+    private modele.GestionnaireBoutons gestBoutons = null; // init après buildScene
 
-    // éléments de la barre de menus
+    private double dureeSimulation = 1.0;
+
+    // ── Éléments de la barre de menus ────────────────────────────────────────
     private MenuItem menuChargerCircuit;
     private MenuItem menuChargerTypes;
     private MenuItem menuChargerAeronefs;
@@ -74,31 +77,27 @@ public class MainController {
     private MenuItem menuParametres;
     private MenuItem menuAide;
 
-    // contrôles de la barre de lecture
-    Button       btnPlay;
-    Button       btnPause;
-    Button       btnStop;
-    Label        labelTemps;
-    Slider       sliderTemps;
+    // ── Contrôles de la barre de lecture ─────────────────────────────────────
+    Button            btnPlay;
+    Button            btnPause;
+    Button            btnStop;
+    Label             labelTemps;
+    Slider            sliderTemps;
     ChoiceBox<String> choixVitesse;
-    /** Facteur de vitesse choisi par l'utilisateur (×1 = simSpeed 20, la valeur par défaut). */
-    private double  vitesseFacteur    = 1.0;
-    /** Mis à vrai quand c'est la simulation qui bouge le slider, pour ne pas déclencher un seek en retour. */
-    private boolean enMiseAJourSlider = false;
+    private double    vitesseFacteur    = 1.0;
+    private boolean   enMiseAJourSlider = false;
 
-    // vue 3D et son conteneur
+    // ── Vues ─────────────────────────────────────────────────────────────────
     StackPane         conteneur3D;
-    Vue3DController   vue3D;
+    Vue3D             vue3D;
+    VuePanneauControle panneau;
 
-    // panneau latéral de contrôle (distance conflit, caméra, etc.)
-    PanneauControleController panneauControle;
-
-    // barre de statut en bas de fenêtre
+    // ── Barre de statut ───────────────────────────────────────────────────────
     Label labelStatut;
 
     // ─────────────────────────────────────────────────────────────────────────
 
-    public MainController(Stage stage) {
+    public ControleurPrincipal(Stage stage) {
         this.stage = stage;
     }
 
@@ -115,30 +114,29 @@ public class MainController {
 
         // La vue 3D doit être initialisée une fois le panneau attaché au graphe de scène
         Platform.runLater(() -> {
-            vue3D = new Vue3DController();
+            vue3D = new Vue3D();
             vue3D.initialiser(conteneur3D);
-            panneauControle.setVue3DController(vue3D);
+            panneau.setVue3D(vue3D);
 
             // Init boutons GPIO physiques (après vue3D)
             gestBoutons = new modele.GestionnaireBoutons(
                 (dx, dz) -> { if (vue3D != null) vue3D.deplacerCamera(dx, dz); },
                 (dir, appuye) -> {
-                    if (panneauControle == null) return;
+                    if (panneau == null) return;
                     switch (dir) {
-                        case HAUT   -> { if (appuye) panneauControle.activerVoyant(panneauControle.voyantNord);
-                                         else        panneauControle.desactiverVoyant(panneauControle.voyantNord); }
-                        case BAS    -> { if (appuye) panneauControle.activerVoyant(panneauControle.voyantSud);
-                                         else        panneauControle.desactiverVoyant(panneauControle.voyantSud); }
-                        case GAUCHE -> { if (appuye) panneauControle.activerVoyant(panneauControle.voyantOuest);
-                                         else        panneauControle.desactiverVoyant(panneauControle.voyantOuest); }
-                        case DROITE -> { if (appuye) panneauControle.activerVoyant(panneauControle.voyantEst);
-                                         else        panneauControle.desactiverVoyant(panneauControle.voyantEst); }
+                        case HAUT   -> { if (appuye) panneau.activerVoyant(panneau.voyantNord);
+                                         else        panneau.desactiverVoyant(panneau.voyantNord); }
+                        case BAS    -> { if (appuye) panneau.activerVoyant(panneau.voyantSud);
+                                         else        panneau.desactiverVoyant(panneau.voyantSud); }
+                        case GAUCHE -> { if (appuye) panneau.activerVoyant(panneau.voyantOuest);
+                                         else        panneau.desactiverVoyant(panneau.voyantOuest); }
+                        case DROITE -> { if (appuye) panneau.activerVoyant(panneau.voyantEst);
+                                         else        panneau.desactiverVoyant(panneau.voyantEst); }
                     }
                 }
             );
         });
 
-        // Demander confirmation avant de fermer via la croix
         stage.setOnCloseRequest(e -> {
             e.consume();
             demanderConfirmationQuitter();
@@ -174,31 +172,24 @@ public class MainController {
         menuVueHaute = new MenuItem("Vue haute");
         menuVueBasse = new MenuItem("Vue basse");
 
-        menuVueHaute.setOnAction(e -> {
-            if (panneauControle != null) panneauControle.activerVueHaute();
-        });
-        menuVueBasse.setOnAction(e -> {
-            if (panneauControle != null) panneauControle.activerVueBasse();
-        });
+        menuVueHaute.setOnAction(e -> { if (panneau != null) panneau.activerVueHaute(); });
+        menuVueBasse.setOnAction(e -> { if (panneau != null) panneau.activerVueBasse(); });
 
         Menu menuCamera = new Menu("Caméra");
         menuCamera.getItems().addAll(menuVueHaute, menuVueBasse);
 
         menuParametres = new MenuItem("Paramètres…");
         menuParametres.setOnAction(e -> ouvrirParametres());
-
         Menu menuParam = new Menu("Paramètres");
         menuParam.getItems().add(menuParametres);
 
         menuAide = new MenuItem("À propos…");
         menuAide.setOnAction(e -> ouvrirAPropos());
-
         Menu menuAideMenu = new Menu("Aide");
         menuAideMenu.getItems().add(menuAide);
 
-        // ── Menu Sélection 3D ────────────────────────────────────────────────
         menuSelection3D = new Menu("Sélection 3D");
-        reconstruireMenuSelection3D();   // construit la section "global" (sans types encore)
+        reconstruireMenuSelection3D();
 
         MenuBar bar = new MenuBar();
         bar.getMenus().addAll(menuFichier, menuSelection3D, menuCamera, menuParam, menuAideMenu);
@@ -238,24 +229,19 @@ public class MainController {
         sliderTemps.setSnapToTicks(false);
         sliderTemps.setPrefWidth(400);
         sliderTemps.setLabelFormatter(new javafx.util.StringConverter<>() {
-            @Override public String toString(Double v) {
-                return String.format("%02.0fh", v);
-            }
+            @Override public String toString(Double v)   { return String.format("%02.0fh", v); }
             @Override public Double fromString(String s) { return 0.0; }
         });
         HBox.setHgrow(sliderTemps, Priority.ALWAYS);
 
         sliderTemps.valueProperty().addListener((obs, oldV, newV) -> {
-            // Le label suit directement la position du slider en HH:MM
             labelTemps.setText(formaterPositionSlider(newV.doubleValue()));
-            // Si c'est l'utilisateur qui a bougé le slider (pas la simulation), on saute au bon moment
             if (!enMiseAJourSlider && simulation != null && etat != EtatSimulation.ARRET) {
                 double secondesSimulees = (newV.doubleValue() / 24.0) * dureeSimulation;
                 simulation.requestSeek(secondesSimulees);
             }
         });
 
-        // Sélecteur de vitesse de simulation, style YouTube
         ChoiceBox<String> choixVitesse = new ChoiceBox<>();
         choixVitesse.getItems().addAll("×0.25", "×0.5", "×1", "×1.5", "×2");
         choixVitesse.setValue("×1");
@@ -269,21 +255,17 @@ public class MainController {
                 default      -> 1.0;
             };
             if (simulation != null) simulation.setSimSpeed(20.0 * facteur);
-            vitesseFacteur = facteur;  // mémorisé pour le prochain démarrage
+            vitesseFacteur = facteur;
         });
         this.choixVitesse = choixVitesse;
 
-        Separator sep1 = new Separator(Orientation.VERTICAL);
-        Separator sep2 = new Separator(Orientation.VERTICAL);
-        Separator sep3 = new Separator(Orientation.VERTICAL);
-
         return new ToolBar(
                 btnPlay, btnPause, btnStop,
-                sep1,
+                new Separator(Orientation.VERTICAL),
                 lblTempsLabel, labelTemps,
-                sep2,
+                new Separator(Orientation.VERTICAL),
                 sliderTemps,
-                sep3,
+                new Separator(Orientation.VERTICAL),
                 choixVitesse
         );
     }
@@ -291,19 +273,16 @@ public class MainController {
     // =========================================================================
     //  CENTRE
     // =========================================================================
-
     private SplitPane buildCenter() {
         conteneur3D = new StackPane();
         conteneur3D.getStyleClass().add("conteneur-3d");
 
-        // Texte affiché tant qu'aucun fichier n'est chargé
         Label placeholder = new Label("Vue 3D — circuit aérodrome");
         placeholder.getStyleClass().add("label-3d-placeholder");
         conteneur3D.getChildren().add(placeholder);
 
-        // ── Panneau de contrôle ──────────────────────────────────────────────
-        panneauControle = new PanneauControleController(this);
-        ScrollPane scrollPanneau = new ScrollPane(panneauControle.buildView());
+        panneau = new VuePanneauControle(this);
+        ScrollPane scrollPanneau = new ScrollPane(panneau.buildView());
         scrollPanneau.setFitToWidth(true);
         scrollPanneau.setMinWidth(280);
         scrollPanneau.setPrefWidth(340);
@@ -345,8 +324,8 @@ public class MainController {
             fichierTypes = f;
             try {
                 typesCharges = ParseurTypeAeronefs.charger(f);
-                modeles3DParType.clear();          // reset des assignations si nouveau fichier
-                reconstruireMenuSelection3D();     // ajoute une entrée par type dans le menu
+                modeles3DParType.clear();
+                reconstruireMenuSelection3D();
                 setStatut("Types aéronefs chargés : " + f.getName()
                         + " (" + typesCharges.size() + " types)");
             } catch (IOException ex) {
@@ -379,16 +358,15 @@ public class MainController {
 
     private void actionPlay() {
         if (etat == EtatSimulation.ARRET) {
-            // On ne peut pas démarrer si les 3 fichiers ne sont pas chargés
             if (fichierCircuit == null || fichierTypes == null || fichierAeronefs == null) {
                 Alert alert = new Alert(Alert.AlertType.WARNING);
                 alert.initOwner(stage);
                 alert.setTitle("Fichiers manquants");
                 alert.setHeaderText("Veuillez charger les 3 fichiers de données.");
                 alert.setContentText(
-                        (fichierCircuit  == null ? "✗ Circuit AD\n"        : "") +
-                        (fichierTypes    == null ? "✗ Types aéronefs\n"    : "") +
-                        (fichierAeronefs == null ? "✗ Aéronefs\n"          : "")
+                        (fichierCircuit  == null ? "✗ Circuit AD\n"     : "") +
+                        (fichierTypes    == null ? "✗ Types aéronefs\n" : "") +
+                        (fichierAeronefs == null ? "✗ Aéronefs\n"       : "")
                 );
                 alert.showAndWait();
                 return;
@@ -414,20 +392,14 @@ public class MainController {
     }
 
     // =========================================================================
-    //  MENU SÉLECTION 3D  (reconstruit à chaque chargement de types)
+    //  MENU SÉLECTION 3D
     // =========================================================================
 
-    /**
-     * Reconstruit entièrement le menu "Sélection 3D" :
-     *  - Une section "Tous les types" (modèle global / fallback)
-     *  - Si des types sont chargés : une section par type avec son propre .obj
-     */
     private void reconstruireMenuSelection3D() {
         menuSelection3D.getItems().clear();
 
-        // ── Section globale ──────────────────────────────────────────────────
-        MenuItem itemGlobalCharger  = new MenuItem("Charger modèle global (tous types)…");
-        MenuItem itemGlobalRetirer  = new MenuItem("Retirer le modèle global");
+        MenuItem itemGlobalCharger = new MenuItem("Charger modèle global (tous types)…");
+        MenuItem itemGlobalRetirer = new MenuItem("Retirer le modèle global");
         itemGlobalRetirer.setDisable(fichierModele3D == null);
 
         itemGlobalCharger.setOnAction(e -> {
@@ -450,7 +422,6 @@ public class MainController {
 
         menuSelection3D.getItems().addAll(itemGlobalCharger, itemGlobalRetirer);
 
-        // ── Sections par type (uniquement si des types sont chargés) ─────────
         if (!typesCharges.isEmpty()) {
             menuSelection3D.getItems().add(new SeparatorMenuItem());
 
@@ -482,14 +453,12 @@ public class MainController {
                 menuSelection3D.getItems().addAll(itemCharger, itemRetirer);
             }
         } else {
-            // Indication que les types ne sont pas encore chargés
             MenuItem infoItem = new MenuItem("(charger les types d'abord)");
             infoItem.setDisable(true);
             menuSelection3D.getItems().addAll(new SeparatorMenuItem(), infoItem);
         }
     }
 
-    /** FileChooser limité aux .obj. */
     private File choisirFichierObj(String titre) {
         FileChooser chooser = new FileChooser();
         chooser.setTitle(titre);
@@ -501,7 +470,7 @@ public class MainController {
     }
 
     // =========================================================================
-    //  SIMULATION
+    //  SIMULATION  (orchestration modèle ↔ vues)
     // =========================================================================
 
     private void demarrerSimulation() {
@@ -519,112 +488,97 @@ public class MainController {
             return;
         }
 
-        // On estime la durée totale pour que le slider 0-24h couvre exactement la simu
         dureeSimulation = calculerDureeSimulation();
 
-        double distSeuil = panneauControle != null
-                ? panneauControle.getDistanceSeuil()
-                : 400.0;
-
+        double distSeuil = panneau != null ? panneau.getDistanceSeuil() : 400.0;
         gestConflits = new GestionnaireConflits(distSeuil);
         simulation   = new Simulation(circuit, aeronefs, gestConflits);
         simulation.setSimSpeed(20.0 * vitesseFacteur);
 
-        // Afficher le circuit 3D et préparer les nœuds représentant les avions (sphères ou modèle .obj)
         if (vue3D != null) {
             conteneur3D.getChildren().removeIf(n -> n instanceof Label l && !"labelCamPos".equals(l.getId()));
-            vue3D.setModele3D(fichierModele3D);            // modèle global (fallback)
-            vue3D.setModeles3DParType(modeles3DParType);   // modèles spécifiques par type
+            vue3D.setModele3D(fichierModele3D);
+            vue3D.setModeles3DParType(modeles3DParType);
             vue3D.afficherCircuit(circuit);
             vue3D.initialiserSpheres(aeronefs);
             vue3D.setCameraVueBasse();
         }
 
-        // À chaque tick, la simulation appelle ce listener depuis son thread.
-        // On répercute les changements sur l'interface via Platform.runLater.
+        // ── Notification du modèle → mise à jour des vues ───────────────────
+        // Le modèle (Simulation) appelle onTick() à chaque pas de temps.
+        // Le contrôleur reçoit la notification et met à jour toutes les vues.
         simulation.setTickListener((tempsEcoule, actifs, conflits) ->
             Platform.runLater(() -> {
-                // Avancer le slider sans déclencher de seek en retour
+
+                // ── Avancer le slider ────────────────────────────────────────
                 enMiseAJourSlider = true;
                 double posSlider = (dureeSimulation > 0)
-                        ? Math.min((tempsEcoule / dureeSimulation) * 24.0, 24.0)
-                        : 0;
+                        ? Math.min((tempsEcoule / dureeSimulation) * 24.0, 24.0) : 0;
                 sliderTemps.setValue(posSlider);
                 enMiseAJourSlider = false;
 
-                // Mettre à jour les positions des avions dans la vue 3D
+                // ── Mettre à jour la vue 3D ──────────────────────────────────
                 if (vue3D != null) {
                     vue3D.rafraichirAeronefs(aeronefs, conflits, gestConflits.getProximites());
                 }
 
-                // Relire la distance de conflit au cas où l'utilisateur l'a changée
-                if (panneauControle != null) {
-                    gestConflits.setDistanceSeuil(panneauControle.getDistanceSeuil());
+                // ── Relire la distance de conflit ────────────────────────────
+                if (panneau != null) {
+                    gestConflits.setDistanceSeuil(panneau.getDistanceSeuil());
                 }
 
-                // Afficher les conflits détectés dans le panneau latéral
-                if (panneauControle != null) {
+                // ── Mettre à jour le panneau de contrôle ─────────────────────
+                if (panneau != null) {
                     if (conflits.isEmpty()) {
-                        panneauControle.setConflits("aucun", "—");
+                        panneau.setConflits("aucun", "—");
                     } else {
                         GestionnaireConflits.Conflit premier = conflits.get(0);
-                        panneauControle.setConflits(
+                        panneau.setConflits(
                                 premier.getA1().getIndicatif() + " / " + premier.getA2().getIndicatif(),
                                 String.format("%.0f m", premier.getDistance())
                         );
                     }
 
-                    // ── LEDs ────────────────────────────────────────────────────
-                    // Rouge  : au moins une paire en alarme (distance < seuil)
-                    // Orange : au moins une paire proche mais hors alarme (seuil < distance < 2×seuil)
-                    // Vert   : RAS (aucune paire ni en alarme ni en approche)
-                    // Rouge et orange peuvent être allumées en même temps.
                     boolean rouge  = !conflits.isEmpty();
                     boolean orange = !gestConflits.getProximites().isEmpty();
                     boolean verte  = !rouge && !orange;
 
-                    if (rouge)  panneauControle.allumerLed(panneauControle.ledRouge, "led-rouge");
-                    else        panneauControle.eteindreLed(panneauControle.ledRouge);
+                    if (rouge)  panneau.allumerLed(panneau.ledRouge, "led-rouge");
+                    else        panneau.eteindreLed(panneau.ledRouge);
 
-                    if (orange) panneauControle.allumerLed(panneauControle.ledJaune, "led-orange");
-                    else        panneauControle.eteindreLed(panneauControle.ledJaune);
+                    if (orange) panneau.allumerLed(panneau.ledJaune, "led-orange");
+                    else        panneau.eteindreLed(panneau.ledJaune);
 
-                    if (verte)  panneauControle.allumerLed(panneauControle.ledVerte, "led-verte");
-                    else        panneauControle.eteindreLed(panneauControle.ledVerte);
+                    if (verte)  panneau.allumerLed(panneau.ledVerte, "led-verte");
+                    else        panneau.eteindreLed(panneau.ledVerte);
 
-                    // ── Icône buzzer logiciel ────────────────────────────────────
-                    panneauControle.setBuzzerActif(rouge);
+                    panneau.setBuzzerActif(rouge);
 
-                    // ── LEDs + buzzer physiques RPi ──────────────────────────────
-                    boolean buzzerOn = panneauControle.isBuzzerActif();
-                    gestLEDs.mettreAJour(rouge, orange, !buzzerOn);
+                    // ── LEDs + buzzer physiques RPi ──────────────────────────
+                    gestLEDs.mettreAJour(rouge, orange, !panneau.isBuzzerActif());
 
-                    // ── LCD I2C ──────────────────────────────────────────────────
+                    // ── LCD I2C ──────────────────────────────────────────────
                     if (rouge && !conflits.isEmpty()) {
                         GestionnaireConflits.Conflit c = conflits.get(0);
-                        gestLCD.afficherConflit(
-                                c.getA1().getIndicatif(),
-                                c.getA2().getIndicatif(),
-                                c.getDistance());
+                        gestLCD.afficherConflit(c.getA1().getIndicatif(),
+                                                c.getA2().getIndicatif(),
+                                                c.getDistance());
                     } else if (orange && !gestConflits.getProximites().isEmpty()) {
                         GestionnaireConflits.Conflit c = gestConflits.getProximites().get(0);
-                        gestLCD.afficherProximite(
-                                c.getA1().getIndicatif(),
-                                c.getA2().getIndicatif(),
-                                c.getDistance());
+                        gestLCD.afficherProximite(c.getA1().getIndicatif(),
+                                                  c.getA2().getIndicatif(),
+                                                  c.getDistance());
                     } else {
                         gestLCD.afficherRAS();
                     }
                 }
 
-                // Si tous les avions ont atterri, la simulation s'est arrêtée d'elle-même
                 if (!simulation.isEnCours()) {
                     finDeSimulation();
                 }
             })
         );
 
-        // On démarre la simulation dans un thread daemon pour qu'il s'arrête avec l'appli
         threadSimulation = new Thread(() -> simulation.demarrer());
         threadSimulation.setDaemon(true);
         threadSimulation.setName("Thread-Simulation");
@@ -665,11 +619,11 @@ public class MainController {
         if (choixVitesse != null) choixVitesse.setValue("×1");
         vitesseFacteur = 1.0;
 
-        if (panneauControle != null) {
-            panneauControle.reinitialiserConflits();
-            panneauControle.eteindreLed(panneauControle.ledRouge);
-            panneauControle.eteindreLed(panneauControle.ledJaune);
-            panneauControle.eteindreLed(panneauControle.ledVerte);
+        if (panneau != null) {
+            panneau.reinitialiserConflits();
+            panneau.eteindreLed(panneau.ledRouge);
+            panneau.eteindreLed(panneau.ledJaune);
+            panneau.eteindreLed(panneau.ledVerte);
         }
         gestLEDs.eteindreTout();
         gestLCD.afficherRAS();
@@ -682,7 +636,7 @@ public class MainController {
         btnPlay .setDisable(false);
         btnPause.setDisable(true);
         btnStop .setDisable(true);
-        if (panneauControle != null) panneauControle.setConflits("terminé", "—");
+        if (panneau != null) panneau.setConflits("terminé", "—");
         gestLEDs.eteindreTout();
         setStatut("Simulation terminée — tous les aéronefs ont atterri.");
     }
@@ -717,13 +671,11 @@ public class MainController {
 
         Label lblDist = new Label("Distance conflit par défaut (m) :");
         TextField tfDist = new TextField(
-                panneauControle != null
-                        ? String.valueOf((int) panneauControle.getDistanceSeuil())
-                        : "400"
+                panneau != null ? String.valueOf((int) panneau.getDistanceSeuil()) : "400"
         );
         tfDist.setPrefWidth(80);
 
-        Button btnOk     = new Button("OK");
+        Button btnOk      = new Button("OK");
         Button btnAnnuler = new Button("Annuler");
         btnOk.setPrefWidth(80);
         btnAnnuler.setPrefWidth(80);
@@ -732,8 +684,8 @@ public class MainController {
             try {
                 double val = Double.parseDouble(tfDist.getText().replace(',', '.'));
                 if (val < 50 || val > 2000) throw new NumberFormatException();
-                if (panneauControle != null) panneauControle.setDistanceSeuil(val);
-                if (gestConflits   != null) gestConflits.setDistanceSeuil(val);
+                if (panneau      != null) panneau.setDistanceSeuil(val);
+                if (gestConflits != null) gestConflits.setDistanceSeuil(val);
                 setStatut("Distance conflit mise à jour : " + (int) val + " m");
                 fenetre.close();
             } catch (NumberFormatException ex) {
@@ -744,12 +696,9 @@ public class MainController {
         btnAnnuler.setOnAction(e -> fenetre.close());
 
         HBox boutons = new HBox(10, btnOk, btnAnnuler);
-        boutons.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
+        boutons.setAlignment(Pos.CENTER_RIGHT);
 
-        VBox racine = new VBox(12,
-                new HBox(8, lblDist, tfDist),
-                boutons
-        );
+        VBox racine = new VBox(12, new HBox(8, lblDist, tfDist), boutons);
         racine.setPadding(new Insets(20));
         racine.setPrefWidth(380);
 
@@ -780,13 +729,6 @@ public class MainController {
         if (labelStatut != null) labelStatut.setText(message);
     }
 
-    /**
-     * Estime le temps auquel le dernier avion atterrit, en secondes simulées.
-     * Sert à caler le slider sur 24h : 100% du slider = fin de la simulation.
-     *
-     * Calcul : pour chaque avion, tempsDepart + distance_totale / vitesse.
-     * On retourne le maximum.
-     */
     private double calculerDureeSimulation() {
         if (circuit == null || aeronefs == null || aeronefs.isEmpty()) return 1.0;
 
@@ -808,7 +750,6 @@ public class MainController {
         return dureeMax;
     }
 
-    /** Convertit une valeur du slider (0-24 heures) en texte "HH:MM". */
     private String formaterPositionSlider(double heures) {
         int h = (int) heures;
         int m = (int) Math.round((heures - h) * 60);

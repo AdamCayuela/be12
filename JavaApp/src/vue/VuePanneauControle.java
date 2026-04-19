@@ -1,5 +1,6 @@
-package View;
+package vue;
 
+import controleur.ControleurPrincipal;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -8,17 +9,23 @@ import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 
-public class PanneauControleController {
+/**
+ * VUE du panneau de contrôle latéral.
+ *
+ * Responsabilité MVC : vue pure.
+ *   - Construit et affiche les sections caméra, LEDs, boutons, buzzer, conflits.
+ *   - Expose des méthodes de mise à jour appelées par le contrôleur.
+ *   - Ne contient pas de logique métier ; délègue les actions au ControleurPrincipal.
+ */
+public class VuePanneauControle {
 
-    private final MainController main;
-
-    private Vue3DController vue3D;
+    private final ControleurPrincipal controleur;
+    private Vue3D vue3D;
 
     private static final double PAS_DEPLACEMENT = 30.0;
     private static final double PAS_ZOOM        = 50.0;
-    private static final double PAS_ROTATION    = 10.0;
 
-    public void setVue3DController(Vue3DController v) { this.vue3D = v; }
+    public void setVue3D(Vue3D v) { this.vue3D = v; }
 
     // ── Section 1 : Caméra ───────────────────────────────────────────────────
     CheckBox checkVueHaute;
@@ -32,7 +39,7 @@ public class PanneauControleController {
     // ── Section 2 : Distance conflit ─────────────────────────────────────────
     TextField tfDistanceSeuil;
     Slider    sliderDistance;
-    private boolean enMiseAJour = false;   // verrou anti-boucle
+    private boolean enMiseAJour = false;
 
     // ── Section 3 : LEDs ─────────────────────────────────────────────────────
     Circle ledRouge;
@@ -48,7 +55,7 @@ public class PanneauControleController {
     // ── Section 5 : Buzzer ───────────────────────────────────────────────────
     Label  labelBuzzer;
     Button btnToggleBuzzer;
-    private boolean buzzerActif = true; // activé par défaut
+    private boolean buzzerActif = true;
 
     // ── Section 6 : Conflits ─────────────────────────────────────────────────
     Label labelPremierVol;
@@ -56,8 +63,8 @@ public class PanneauControleController {
 
     // ─────────────────────────────────────────────────────────────────────────
 
-    public PanneauControleController(MainController main) {
-        this.main = main;
+    public VuePanneauControle(ControleurPrincipal controleur) {
+        this.controleur = controleur;
     }
 
     /** Construit et retourne le VBox du panneau complet. */
@@ -85,17 +92,14 @@ public class PanneauControleController {
 
         checkVueHaute = new CheckBox("vue haute (plongeante)");
         checkVueBasse = new CheckBox("vue basse (piste)");
-        // Au démarrage : aucun coché → contre-plongée par défaut (appliquée dans Vue3DController.initialiser)
 
-        // Comportement exclusif + retour contre-plongée si tout décoché
         checkVueHaute.selectedProperty().addListener((obs, wasSelected, isSelected) -> {
             if (isSelected) {
                 checkVueBasse.setSelected(false);
-                main.setStatut("Vue : plongeante");
+                controleur.setStatut("Vue : plongeante");
                 if (vue3D != null) vue3D.setCameraVueHaute();
             } else if (!checkVueBasse.isSelected()) {
-                // Les deux décochés → retour à la vue de base (contre-plongée)
-                main.setStatut("Vue : contre-plongée");
+                controleur.setStatut("Vue : contre-plongée");
                 if (vue3D != null) vue3D.setCameraVueHaute();
             }
         });
@@ -103,11 +107,10 @@ public class PanneauControleController {
         checkVueBasse.selectedProperty().addListener((obs, wasSelected, isSelected) -> {
             if (isSelected) {
                 checkVueHaute.setSelected(false);
-                main.setStatut("Vue : niveau piste");
+                controleur.setStatut("Vue : niveau piste");
                 if (vue3D != null) vue3D.setCameraVueBasse();
             } else if (!checkVueHaute.isSelected()) {
-                // Les deux décochés → retour à la vue de base (contre-plongée)
-                main.setStatut("Vue : contre-plongée");
+                controleur.setStatut("Vue : contre-plongée");
                 if (vue3D != null) vue3D.setCameraVueBasse();
             }
         });
@@ -115,13 +118,11 @@ public class PanneauControleController {
         HBox checkBoxRow = new HBox(20, checkVueHaute, checkVueBasse);
         checkBoxRow.setAlignment(Pos.CENTER);
 
-        // Pavé directionnel + zoom
         btnCamNO     = camBtn("↖"); btnCamHaut    = camBtn("↑"); btnCamNE    = camBtn("↗");
         btnCamGauche = camBtn("←"); btnZoomPlus   = camBtn("⊕"); btnCamDroite= camBtn("→");
         btnCamSO     = camBtn("↙"); btnCamBas     = camBtn("↓"); btnCamSE    = camBtn("↘");
         btnZoomMoins = camBtn("⊖");
 
-        // Tooltips
         btnCamHaut   .setTooltip(new Tooltip("Déplacer vers le haut"));
         btnCamBas    .setTooltip(new Tooltip("Déplacer vers le bas"));
         btnCamGauche .setTooltip(new Tooltip("Déplacer vers la gauche"));
@@ -129,19 +130,17 @@ public class PanneauControleController {
         btnZoomPlus  .setTooltip(new Tooltip("Zoom avant"));
         btnZoomMoins .setTooltip(new Tooltip("Zoom arrière"));
 
-        // Boutons caméra → déplacement + status bar erreur caméra à modifier
-        btnCamHaut  .setOnAction(e -> { main.setStatut("Caméra ↑");    if (vue3D!=null) vue3D.deplacerCamera(0,  -PAS_DEPLACEMENT); });
-        btnCamBas   .setOnAction(e -> { main.setStatut("Caméra ↓");    if (vue3D!=null) vue3D.deplacerCamera(0,   PAS_DEPLACEMENT); });
-        btnCamGauche.setOnAction(e -> { main.setStatut("Caméra ←");    if (vue3D!=null) vue3D.deplacerCamera(-PAS_DEPLACEMENT, 0); });
-        btnCamDroite.setOnAction(e -> { main.setStatut("Caméra →");    if (vue3D!=null) vue3D.deplacerCamera( PAS_DEPLACEMENT, 0); });
-        btnCamNO    .setOnAction(e -> { main.setStatut("Caméra ← ↑");  if (vue3D!=null) vue3D.deplacerCamera(-PAS_DEPLACEMENT, -PAS_DEPLACEMENT); });
-        btnCamNE    .setOnAction(e -> { main.setStatut("Caméra → ↑");  if (vue3D!=null) vue3D.deplacerCamera( PAS_DEPLACEMENT, -PAS_DEPLACEMENT); });
-        btnCamSO    .setOnAction(e -> { main.setStatut("Caméra ← ↓");  if (vue3D!=null) vue3D.deplacerCamera(-PAS_DEPLACEMENT,  PAS_DEPLACEMENT); });
-        btnCamSE    .setOnAction(e -> { main.setStatut("Caméra → ↓");  if (vue3D!=null) vue3D.deplacerCamera( PAS_DEPLACEMENT,  PAS_DEPLACEMENT); });
-        btnZoomPlus .setOnAction(e -> { main.setStatut("Zoom +");       if (vue3D!=null) vue3D.zoomer( PAS_ZOOM); });
-        btnZoomMoins.setOnAction(e -> { main.setStatut("Zoom −");       if (vue3D!=null) vue3D.zoomer(-PAS_ZOOM); });
+        btnCamHaut  .setOnAction(e -> { controleur.setStatut("Caméra ↑");    if (vue3D!=null) vue3D.deplacerCamera(0,  -PAS_DEPLACEMENT); });
+        btnCamBas   .setOnAction(e -> { controleur.setStatut("Caméra ↓");    if (vue3D!=null) vue3D.deplacerCamera(0,   PAS_DEPLACEMENT); });
+        btnCamGauche.setOnAction(e -> { controleur.setStatut("Caméra ←");    if (vue3D!=null) vue3D.deplacerCamera(-PAS_DEPLACEMENT, 0); });
+        btnCamDroite.setOnAction(e -> { controleur.setStatut("Caméra →");    if (vue3D!=null) vue3D.deplacerCamera( PAS_DEPLACEMENT, 0); });
+        btnCamNO    .setOnAction(e -> { controleur.setStatut("Caméra ← ↑");  if (vue3D!=null) vue3D.deplacerCamera(-PAS_DEPLACEMENT, -PAS_DEPLACEMENT); });
+        btnCamNE    .setOnAction(e -> { controleur.setStatut("Caméra → ↑");  if (vue3D!=null) vue3D.deplacerCamera( PAS_DEPLACEMENT, -PAS_DEPLACEMENT); });
+        btnCamSO    .setOnAction(e -> { controleur.setStatut("Caméra ← ↓");  if (vue3D!=null) vue3D.deplacerCamera(-PAS_DEPLACEMENT,  PAS_DEPLACEMENT); });
+        btnCamSE    .setOnAction(e -> { controleur.setStatut("Caméra → ↓");  if (vue3D!=null) vue3D.deplacerCamera( PAS_DEPLACEMENT,  PAS_DEPLACEMENT); });
+        btnZoomPlus .setOnAction(e -> { controleur.setStatut("Zoom +");       if (vue3D!=null) vue3D.zoomer( PAS_ZOOM); });
+        btnZoomMoins.setOnAction(e -> { controleur.setStatut("Zoom −");       if (vue3D!=null) vue3D.zoomer(-PAS_ZOOM); });
 
-        // Pavé directionnel 3×3 (case centrale vide)
         GridPane grid = new GridPane();
         grid.setHgap(4); grid.setVgap(4);
         grid.setAlignment(Pos.CENTER);
@@ -149,7 +148,6 @@ public class PanneauControleController {
         grid.add(btnCamGauche, 0, 1);                                 grid.add(btnCamDroite, 2, 1);
         grid.add(btnCamSO,     0, 2); grid.add(btnCamBas,     1, 2); grid.add(btnCamSE,     2, 2);
 
-        // Boutons zoom empilés à droite du pavé
         VBox zoomBox = new VBox(4, btnZoomPlus, btnZoomMoins);
         zoomBox.setAlignment(Pos.CENTER);
 
@@ -182,18 +180,16 @@ public class PanneauControleController {
         sliderDistance.setMinorTickCount(4);
         sliderDistance.setBlockIncrement(50);
 
-        // ── Synchronisation Slider → TextField ───────────────────────────────
         sliderDistance.valueProperty().addListener((obs, oldV, newV) -> {
             if (enMiseAJour) return;
             enMiseAJour = true;
             int v = (int) Math.round(newV.doubleValue());
             tfDistanceSeuil.setText(String.valueOf(v));
-            tfDistanceSeuil.setStyle("");          // reset couleur erreur
-            main.setStatut("Distance conflit : " + v + " m");
+            tfDistanceSeuil.setStyle("");
+            controleur.setStatut("Distance conflit : " + v + " m");
             enMiseAJour = false;
         });
 
-        // ── Synchronisation TextField → Slider (sur validation Enter / focus out) ─
         Runnable validerTextField = () -> {
             if (enMiseAJour) return;
             String texte = tfDistanceSeuil.getText().trim().replace(',', '.');
@@ -204,10 +200,9 @@ public class PanneauControleController {
                 sliderDistance.setValue(val);
                 tfDistanceSeuil.setText(String.valueOf((int) val));
                 tfDistanceSeuil.setStyle("");
-                main.setStatut("Distance conflit : " + (int) val + " m");
+                controleur.setStatut("Distance conflit : " + (int) val + " m");
                 enMiseAJour = false;
             } catch (NumberFormatException ex) {
-                // Marquer en rouge, ne pas changer le slider
                 tfDistanceSeuil.setStyle("-fx-border-color: #cc3333; -fx-border-width: 2;");
                 tfDistanceSeuil.setTooltip(new Tooltip("Entrez un nombre entre 50 et 2000"));
             }
@@ -246,7 +241,6 @@ public class PanneauControleController {
         ledJaune.getStyleClass().addAll("led", "led-orange");
         ledVerte.getStyleClass().addAll("led", "led-verte");
 
-        // État initial : éteintes (grises)
         setLedEteinte(ledRouge);
         setLedEteinte(ledJaune);
         setLedEteinte(ledVerte);
@@ -351,40 +345,31 @@ public class PanneauControleController {
     }
 
     // =========================================================================
-    //  API PUBLIQUE — appelée par MainController et (plus tard) les services
+    //  API PUBLIQUE — mise à jour par le contrôleur
     // =========================================================================
 
     /** Active la vue plongeante (vue haute). */
-    public void activerVueHaute() {
-        checkVueHaute.setSelected(true);   // le listener décoche l'autre et appelle setCameraVueHaute
-    }
+    public void activerVueHaute() { checkVueHaute.setSelected(true); }
 
-    /** Active la vue top/zénith (vue basse). */
-    public void activerVueBasse() {
-        checkVueBasse.setSelected(true);   // le listener décoche l'autre et appelle setCameraVueBasse
-    }
+    /** Active la vue niveau piste (vue basse). */
+    public void activerVueBasse() { checkVueBasse.setSelected(true); }
 
     /** Active la vue contre-plongée (décroche les deux cases). */
     public void activerContrePlongee() {
-        checkVueHaute.setSelected(false);  // listeners → setCameraContrePlongee quand les deux sont faux
+        checkVueHaute.setSelected(false);
         checkVueBasse.setSelected(false);
     }
 
     /** Retourne la distance seuil actuellement affichée. */
-    public double getDistanceSeuil() {
-        return sliderDistance.getValue();
-    }
+    public double getDistanceSeuil() { return sliderDistance.getValue(); }
 
-    /**
-     * Modifie la distance seuil depuis l'extérieur (ex. fenêtre Paramètres).
-     * Met à jour le slider ET le champ texte.
-     */
+    /** Modifie la distance seuil (ex. depuis la fenêtre Paramètres). */
     public void setDistanceSeuil(double metres) {
         double clamped = Math.max(50, Math.min(2000, metres));
-        sliderDistance.setValue(clamped);              // le listener met à jour le TextField
+        sliderDistance.setValue(clamped);
     }
 
-    /** Allume une LED (retire la classe éteinte, applique la classe allumée). */
+    /** Allume une LED. */
     public void allumerLed(Circle led, String classeAllumee) {
         led.getStyleClass().remove("led-eteinte");
         if (!led.getStyleClass().contains(classeAllumee))
@@ -415,9 +400,9 @@ public class PanneauControleController {
     public boolean isBuzzerActif() { return buzzerActif; }
 
     /**
-     * Met à jour l'icône et le bouton buzzer.
-     * actif=true  → conflit en cours  → 🔊, bouton Couper actif
-     * actif=false → pas de conflit    → 🔇, bouton désactivé, reset coupe
+     * Met à jour l'icône buzzer selon l'état de conflit.
+     * actif=true  → conflit en cours → 🔊
+     * actif=false → pas de conflit   → 🔇
      */
     public void setBuzzerActif(boolean actif) {
         labelBuzzer.setText(actif ? "🔊" : "🔇");
@@ -425,14 +410,12 @@ public class PanneauControleController {
 
     /** Met à jour l'écran LCD de conflits. */
     public void setConflits(String premierVol, String conflitProche) {
-        labelPremierVol   .setText(premierVol   == null || premierVol.isBlank()   ? "—" : premierVol);
+        labelPremierVol   .setText(premierVol    == null || premierVol.isBlank()    ? "—" : premierVol);
         labelConflitProche.setText(conflitProche == null || conflitProche.isBlank() ? "—" : conflitProche);
     }
 
     /** Remet les conflits à zéro. */
-    public void reinitialiserConflits() {
-        setConflits("—", "—");
-    }
+    public void reinitialiserConflits() { setConflits("—", "—"); }
 
     // =========================================================================
     //  UTILITAIRES PRIVÉS
@@ -466,7 +449,6 @@ public class PanneauControleController {
         return pane;
     }
 
-    /** Applique l'apparence "éteinte" (gris clair) à un cercle LED. */
     private void setLedEteinte(Circle led) {
         led.getStyleClass().add("led-eteinte");
         led.setFill(Color.web("#c8c8d0"));

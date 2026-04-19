@@ -28,17 +28,9 @@ public class GestionnaireLEDs {
             pi4j = Pi4J.newAutoContext();
 
             // ── Initialisation des broches ───────────────────────────────
-            ledVert  = pi4j.digitalOutput().create(21);
-            ledVert.config().initialState(DigitalState.LOW);
-            ledVert.config().shutdownState(DigitalState.LOW);
-
-            ledJaune = pi4j.digitalOutput().create(20);
-            ledJaune.config().initialState(DigitalState.LOW);
-            ledJaune.config().shutdownState(DigitalState.LOW);
-
-            ledRouge = pi4j.digitalOutput().create(16);
-            ledRouge.config().initialState(DigitalState.LOW);
-            ledRouge.config().shutdownState(DigitalState.LOW);
+            ledVert  = pi4j.digitalOutput().create(21); // physique 40
+            ledJaune = pi4j.digitalOutput().create(20); // physique 38
+            ledRouge = pi4j.digitalOutput().create(16); // physique 36
 
             // ── Éteindre toutes les LEDs au démarrage ───────────────────
             ledVert .low();

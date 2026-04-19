@@ -1,8 +1,13 @@
 package modele;
 
+import com.pi4j.Pi4J;
+import com.pi4j.context.Context;
+import com.pi4j.io.gpio.digital.DigitalOutput;
+import com.pi4j.io.gpio.digital.DigitalState;
+
 /**
- * Contrôle les LEDs physiques du Raspberry Pi via la commande pinctrl.
- * Compatible RPi 5 / kernel 6.x (sysfs GPIO déprécié sur ces versions).
+ * Contrôle les LEDs physiques du Raspberry Pi via pi4j (provider gpiod).
+ * Compatible RPi 5 / kernel 6.x.
  *
  * Brochage physique → BCM :
  *   Broche 40 (BCM 21) → LED Verte  (RAS)
@@ -10,7 +15,7 @@ package modele;
  *   Broche 36 (BCM 16) → LED Rouge  (conflit)
  *   Broche 34           → GND
  *
- * Si pinctrl n'est pas disponible (ex: exécution sur Mac),
+ * Si pi4j n'est pas disponible (ex: exécution sur Mac),
  * la classe se désactive silencieusement.
  */
 public class GestionnaireLEDs {
@@ -19,18 +24,27 @@ public class GestionnaireLEDs {
     private static final int PIN_JAUNE = 20; // physique 38
     private static final int PIN_ROUGE = 16; // physique 36
 
-    private boolean disponible = false;
+    private Context       pi4j      = null;
+    private DigitalOutput ledVert   = null;
+    private DigitalOutput ledJaune  = null;
+    private DigitalOutput ledRouge  = null;
+    private boolean       disponible = false;
 
     public GestionnaireLEDs() {
         try {
-            // Initialiser les 3 broches en sortie éteintes
-            pinctrl(PIN_VERT,  false);
-            pinctrl(PIN_JAUNE, false);
-            pinctrl(PIN_ROUGE, false);
+            pi4j = Pi4J.newAutoContext();
+
+            ledVert  = creerSortie(PIN_VERT,  "led-verte");
+            ledJaune = creerSortie(PIN_JAUNE, "led-jaune");
+            ledRouge = creerSortie(PIN_ROUGE, "led-rouge");
+
+            // Éteindre toutes les LEDs au démarrage
+            eteindreTout();
+
             disponible = true;
-            System.out.println("[LED] pinctrl initialisé — LEDs prêtes.");
+            System.out.println("[LED] pi4j initialisé — LEDs prêtes.");
         } catch (Exception e) {
-            System.out.println("[LED] pinctrl non disponible (hors RPi ?) : " + e.getMessage());
+            System.out.println("[LED] pi4j non disponible (hors RPi ?) : " + e.getMessage());
         }
     }
 
@@ -47,34 +61,46 @@ public class GestionnaireLEDs {
     public void mettreAJour(boolean conflit, boolean proximite) {
         if (!disponible) return;
         try {
-            pinctrl(PIN_ROUGE,  conflit);
-            pinctrl(PIN_JAUNE, !conflit && proximite);
-            pinctrl(PIN_VERT,  !conflit && !proximite);
+            setState(ledRouge,  conflit);
+            setState(ledJaune, !conflit && proximite);
+            setState(ledVert,  !conflit && !proximite);
         } catch (Exception ignored) {}
     }
-
-    /** Éteint toutes les LEDs (arrêt ou fin de simulation). */
-    public void eteindreTout() {
-        if (!disponible) return;
-        try {
-            pinctrl(PIN_VERT,  false);
-            pinctrl(PIN_JAUNE, false);
-            pinctrl(PIN_ROUGE, false);
-        } catch (Exception ignored) {}
-    }
-
-    // ---------------------------------------------------------------
-    // Commande pinctrl
-    // ---------------------------------------------------------------
 
     /**
-     * Appelle : pinctrl set <bcm> op dh   (output high = LED allumée)
-     *       ou : pinctrl set <bcm> op dl   (output low  = LED éteinte)
+     * Éteint toutes les LEDs.
+     * Appelé au stop (pas pause) et en fin de simulation.
      */
-    private void pinctrl(int bcm, boolean allumer) throws Exception {
-        String etat = allumer ? "dh" : "dl";
-        Process p = Runtime.getRuntime().exec(
-                new String[]{"pinctrl", "set", String.valueOf(bcm), "op", etat});
-        p.waitFor();
+    public void eteindreTout() {
+        if (ledVert  != null) try { ledVert .low(); } catch (Exception ignored) {}
+        if (ledJaune != null) try { ledJaune.low(); } catch (Exception ignored) {}
+        if (ledRouge != null) try { ledRouge.low(); } catch (Exception ignored) {}
+    }
+
+    /**
+     * Libère le contexte pi4j à la fermeture de l'application.
+     */
+    public void fermer() {
+        eteindreTout();
+        if (pi4j != null) {
+            try { pi4j.shutdown(); } catch (Exception ignored) {}
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Utilitaires
+    // ---------------------------------------------------------------
+
+    private DigitalOutput creerSortie(int bcm, String id) {
+        DigitalOutput out = pi4j.digitalOutput().create(bcm);
+        out.config().initialState(DigitalState.LOW);
+        out.config().shutdownState(DigitalState.LOW);
+        return out;
+    }
+
+    private void setState(DigitalOutput out, boolean allumer) {
+        if (out == null) return;
+        if (allumer) out.high();
+        else         out.low();
     }
 }

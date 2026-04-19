@@ -658,6 +658,7 @@ public class MainController {
         alert.showAndWait().ifPresent(reponse -> {
             if (reponse == ButtonType.OK) {
                 if (simulation != null) simulation.arreter();
+                gestLEDs.fermer();
                 Platform.exit();
             }
         });

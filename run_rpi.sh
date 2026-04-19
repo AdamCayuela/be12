@@ -12,8 +12,8 @@ LIB=/opt/libs/JavaFX17_Obj.jar
 SRC=~/be12/JavaApp/src
 OUT=~/be12/out
 
-# Classpath : lib perso + pi4j + slf4j (requis par pi4j)
-CP=$LIB:$PI4J/pi4j-core.jar:$PI4J/pi4j-plugin-gpiod.jar:$PI4J/pi4j-library-gpiod.jar:$(find /opt/pi4j /usr/share/java -name "slf4j*.jar" 2>/dev/null | tr '\n' ':')
+# Classpath : lib perso + pi4j (GPIO + I2C) + slf4j
+CP=$LIB:$PI4J/pi4j-core.jar:$PI4J/pi4j-plugin-gpiod.jar:$PI4J/pi4j-library-gpiod.jar:$PI4J/pi4j-plugin-linuxfs.jar:$PI4J/pi4j-library-linuxfs.jar:$(find /opt/pi4j /usr/share/java -name "slf4j*.jar" 2>/dev/null | tr '\n' ':')
 
 echo ">>> Compilation..."
 mkdir -p $OUT

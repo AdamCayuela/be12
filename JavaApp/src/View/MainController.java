@@ -58,6 +58,7 @@ public class MainController {
     private Simulation           simulation;
     private Thread               threadSimulation;
     private modele.GestionnaireLEDs gestLEDs = new modele.GestionnaireLEDs();
+    private modele.GestionnaireLCD  gestLCD  = new modele.GestionnaireLCD();
     /** Durée estimée de la simulation en secondes, calculée au démarrage pour caler le slider sur 24h. */
     private double               dureeSimulation  = 1.0;
 
@@ -574,6 +575,23 @@ public class MainController {
 
                     // ── LEDs physiques RPi ───────────────────────────────────────
                     gestLEDs.mettreAJour(rouge, orange);
+
+                    // ── LCD I2C ──────────────────────────────────────────────────
+                    if (rouge && !conflits.isEmpty()) {
+                        GestionnaireConflits.Conflit c = conflits.get(0);
+                        gestLCD.afficherConflit(
+                                c.getA1().getIndicatif(),
+                                c.getA2().getIndicatif(),
+                                c.getDistance());
+                    } else if (orange && !gestConflits.getProximites().isEmpty()) {
+                        GestionnaireConflits.Conflit c = gestConflits.getProximites().get(0);
+                        gestLCD.afficherProximite(
+                                c.getA1().getIndicatif(),
+                                c.getA2().getIndicatif(),
+                                c.getDistance());
+                    } else {
+                        gestLCD.afficherRAS();
+                    }
                 }
 
                 // Si tous les avions ont atterri, la simulation s'est arrêtée d'elle-même
@@ -631,6 +649,7 @@ public class MainController {
             panneauControle.eteindreLed(panneauControle.ledVerte);
         }
         gestLEDs.eteindreTout();
+        gestLCD.afficherRAS();
         setStatut("Simulation arrêtée.");
     }
 
@@ -659,6 +678,7 @@ public class MainController {
             if (reponse == ButtonType.OK) {
                 if (simulation != null) simulation.arreter();
                 gestLEDs.fermer();
+                gestLCD.fermer();
                 Platform.exit();
             }
         });

@@ -1,0 +1,267 @@
+@startuml DiagrammeSequence
+' ══════════════════════════════════════════════════════════════
+'  Simulation Tour de Piste — Diagramme de séquence
+'  Scénario principal : démarrage → tick MVC → arrêt
+' ══════════════════════════════════════════════════════════════
+
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 120
+skinparam sequenceGroupBorderColor #888888
+skinparam sequenceLifeLineBorderColor #555555
+skinparam participantFontSize 12
+skinparam noteFontSize 11
+
+title Simulation Tour de Piste — Cycle MVC complet
+
+actor Utilisateur as U
+participant "Main" as Main
+participant "ControleurPrincipal\n<<controleur>>" as CP
+participant "VuePanneauControle\n<<vue>>" as VP
+participant "Vue3D\n<<vue>>" as V3D
+participant "Simulation\n<<modele>>" as SIM
+participant "GestionnaireConflits\n<<modele>>" as GC
+participant "GestionnaireLEDs\n<<modele>>" as LEDS
+participant "GestionnaireLCD\n<<modele>>" as LCD
+participant "GestionnaireBoutons\n<<modele>>" as BTN
+
+' ══════════════════════════════════════════════════════════════
+' 1. DÉMARRAGE DE L'APPLICATION
+' ══════════════════════════════════════════════════════════════
+== Démarrage de l'application ==
+
+Main -> CP : new ControleurPrincipal(stage)
+activate CP
+
+CP -> LEDS : new GestionnaireLEDs()
+activate LEDS
+LEDS --> CP : (pi4j init LEDs BCM 21/20/16/26)
+deactivate LEDS
+
+CP -> LCD : new GestionnaireLCD()
+activate LCD
+LCD --> CP : (pi4j init I2C 0x27, thread daemon démarré)
+deactivate LCD
+
+CP --> Main : buildScene()
+Main -> CP : buildScene()
+
+CP -> VP : new VuePanneauControle(this)
+activate VP
+VP --> CP : panneau
+deactivate VP
+
+CP -> CP : Platform.runLater(...)
+note right : Exécuté après attachement\ndu graphe de scène JavaFX
+
+CP -> V3D : new Vue3D()
+activate V3D
+V3D -> V3D : initialiser(conteneur3D)
+V3D --> CP : vue3D prête
+deactivate V3D
+
+CP -> VP : setVue3D(vue3D)
+
+CP -> BTN : new GestionnaireBoutons(\n  cameraCallback, voyantCallback)
+activate BTN
+BTN --> CP : (GPIO BCM 1/7/8/25, thread polling démarré)
+deactivate BTN
+
+CP --> Main : Scene
+Main -> U : Fenêtre affichée
+
+' ══════════════════════════════════════════════════════════════
+' 2. CHARGEMENT DES FICHIERS
+' ══════════════════════════════════════════════════════════════
+== Chargement des fichiers ==
+
+U -> CP : Fichier → Charger circuit AD
+CP -> CP : chargerFichierCircuit()
+CP --> VP : setStatut("Circuit chargé")
+
+U -> CP : Fichier → Charger types aéronefs
+CP -> CP : chargerFichierTypes()
+CP --> VP : setStatut("Types chargés")
+
+U -> CP : Fichier → Charger aéronefs
+CP -> CP : chargerFichierAeronefs()
+CP --> VP : setStatut("Aéronefs chargés")
+
+' ══════════════════════════════════════════════════════════════
+' 3. DÉMARRAGE DE LA SIMULATION
+' ══════════════════════════════════════════════════════════════
+== Démarrage de la simulation (▶ Play) ==
+
+U -> CP : clic btnPlay
+CP -> CP : actionPlay() → demarrerSimulation()
+
+CP -> CP : ParseurCircuit.charger(...)
+CP -> CP : ParseurTypeAeronefs.charger(...)
+CP -> CP : ParseurAeronefs.charger(...)
+
+CP -> GC : new GestionnaireConflits(distanceSeuil)
+activate GC
+
+CP -> SIM : new Simulation(circuit, aeronefs, gestConflits)
+activate SIM
+
+CP -> V3D : afficherCircuit(circuit)
+CP -> V3D : initialiserSpheres(aeronefs)
+CP -> V3D : setCameraVueBasse()
+
+CP -> SIM : setTickListener( lambda )
+note right : Le lambda est la notification\nModèle → Contrôleur → Vues
+
+CP -> SIM : demarrer()  [Thread daemon]
+note right of SIM : Boucle ~30 fps\n(tick toutes les 33 ms)
+
+CP --> VP : setStatut("Simulation en cours…")
+CP --> U : btnPause activé, btnStop activé
+
+' ══════════════════════════════════════════════════════════════
+' 4. CYCLE MVC — UN TICK DE SIMULATION
+' ══════════════════════════════════════════════════════════════
+== Tick de simulation (répété ~30×/s) ==
+
+group Modèle — calcul dans le Thread-Simulation
+  SIM -> SIM : avancer tous les aéronefs (dt)
+  SIM -> GC  : detecter(aeronefs)
+  activate GC
+  GC -> GC   : calculer distances 3D
+  GC --> SIM : List<Conflit> conflits
+  deactivate GC
+  SIM -> SIM : vérifier si tous terminés
+end
+
+group Notification Modèle → Contrôleur (Platform.runLater)
+  SIM -> CP : onTick(tempsEcoule, actifs, conflits)
+  note right : Exécuté sur le thread JavaFX
+  activate CP
+
+  group Mise à jour Vue 3D
+    CP -> V3D : rafraichirAeronefs(aeronefs, conflits, proximites)
+    activate V3D
+    V3D -> V3D : déplacer sphères/modèles .obj
+    V3D -> V3D : colorier selon conflit/proximité/RAS
+    deactivate V3D
+  end
+
+  group Mise à jour Panneau de contrôle
+    alt conflit détecté
+      CP -> VP : setConflits("F-ABCD / F-WXYZ", "350 m")
+      CP -> VP : allumerLed(ledRouge, "led-rouge")
+      CP -> VP : eteindreLed(ledJaune)
+      CP -> VP : eteindreLed(ledVerte)
+      CP -> VP : setBuzzerActif(true)
+    else proximité détectée
+      CP -> VP : setConflits("aucun", "—")
+      CP -> VP : eteindreLed(ledRouge)
+      CP -> VP : allumerLed(ledJaune, "led-orange")
+      CP -> VP : eteindreLed(ledVerte)
+      CP -> VP : setBuzzerActif(false)
+    else RAS
+      CP -> VP : setConflits("aucun", "—")
+      CP -> VP : eteindreLed(ledRouge)
+      CP -> VP : eteindreLed(ledJaune)
+      CP -> VP : allumerLed(ledVerte, "led-verte")
+      CP -> VP : setBuzzerActif(false)
+    end
+  end
+
+  group Mise à jour matériel RPi
+    CP -> LEDS : mettreAJour(conflit, proximite, !buzzerActif)
+    activate LEDS
+    LEDS -> LEDS : GPIO high/low (BCM 21/20/16/26)
+    deactivate LEDS
+
+    CP -> LCD : afficherConflit / afficherProximite / afficherRAS
+    activate LCD
+    LCD -> LCD : écrire sur écran I2C via thread dédié
+    deactivate LCD
+  end
+
+  CP --> SIM : (retour)
+  deactivate CP
+end
+
+' ══════════════════════════════════════════════════════════════
+' 5. INTERACTION BOUTONS GPIO → CAMÉRA
+' ══════════════════════════════════════════════════════════════
+== Appui bouton physique GPIO (en parallèle) ==
+
+group Thread-Boutons (polling 80 ms)
+  BTN -> BTN : estAppuye(btnHaut) → LOW → appuyé
+  BTN -> CP  : cameraCallback.deplacer(0, -15)\n[Platform.runLater]
+  CP  -> V3D : deplacerCamera(0, -15)
+  activate V3D
+  V3D -> V3D : camTranslate.setZ(...)
+  deactivate V3D
+
+  BTN -> CP  : voyantCallback.setEtat(HAUT, true)\n[Platform.runLater]
+  CP  -> VP  : activerVoyant(voyantNord)
+  activate VP
+  VP  -> VP  : CSS "voyant-on"
+  deactivate VP
+end
+
+' ══════════════════════════════════════════════════════════════
+' 6. SEEK (déplacement slider)
+' ══════════════════════════════════════════════════════════════
+== Seek utilisateur (glisser le slider) ==
+
+U -> CP  : glisser sliderTemps → valeur 12h
+CP -> SIM : requestSeek(43200.0)
+note right : 12h × 3600 = 43200 s simulées
+SIM -> SIM : seekTarget = 43200\n(appliqué au prochain tick)
+SIM -> SIM : reinitialiser() + avancer() jusqu'à 43200 s
+SIM -> CP  : onTick(...) [Platform.runLater]
+
+' ══════════════════════════════════════════════════════════════
+' 7. ARRÊT DE LA SIMULATION
+' ══════════════════════════════════════════════════════════════
+== Arrêt (⏹ Stop) ==
+
+U -> CP : clic btnStop
+CP -> SIM : arreter()
+deactivate SIM
+CP -> CP : threadSimulation.interrupt()
+
+CP -> VP : reinitialiserConflits()
+CP -> VP : eteindreLed(ledRouge/ledJaune/ledVerte)
+CP -> LEDS : eteindreTout()
+activate LEDS
+LEDS --> CP
+deactivate LEDS
+CP -> LCD : afficherRAS()
+CP --> VP : setStatut("Simulation arrêtée.")
+CP --> U  : btnPlay activé, btnPause/Stop désactivés
+
+' ══════════════════════════════════════════════════════════════
+' 8. FERMETURE DE L'APPLICATION
+' ══════════════════════════════════════════════════════════════
+== Fermeture (×) ==
+
+U -> CP : clic croix fenêtre
+CP -> CP : demanderConfirmationQuitter()
+CP --> U : Alert de confirmation
+
+U -> CP : clic OK
+CP -> LEDS : fermer()
+activate LEDS
+LEDS -> LEDS : eteindreTout() + pi4j.shutdown()
+deactivate LEDS
+
+CP -> LCD : fermer()
+activate LCD
+LCD -> LCD : effacer() + rétroéclairage OFF + pi4j.shutdown()
+deactivate LCD
+
+CP -> BTN : fermer()
+activate BTN
+BTN -> BTN : actif=false + thread.interrupt() + pi4j.shutdown()
+deactivate BTN
+
+CP -> CP : Platform.exit()
+deactivate CP
+
+@enduml

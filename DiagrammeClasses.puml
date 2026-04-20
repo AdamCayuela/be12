@@ -1,0 +1,442 @@
+@startuml DiagrammeClasses
+' ══════════════════════════════════════════════════════════════
+'  Simulation Tour de Piste — Diagramme de classes complet
+'  Architecture MVC : modele / vue / controleur / parseur
+'
+'  Plugin requis dans IntelliJ : PlantUML Integration
+'  (Marketplace → rechercher "PlantUML Integration")
+' ══════════════════════════════════════════════════════════════
+
+skinparam classAttributeIconSize 0
+skinparam classFontSize 12
+skinparam packageFontSize 13
+skinparam packageBackgroundColor #F8F8FF
+skinparam classBackgroundColor #FEFEFE
+skinparam classBorderColor #555555
+skinparam arrowColor #333333
+skinparam linetype ortho
+hide empty members
+
+' ══════════════════════════════════════════════════════════════
+'  PACKAGE modele
+' ══════════════════════════════════════════════════════════════
+package modele #E8F4FD {
+
+  class TypeAeronef {
+    - id : int
+    - nom : String
+    - categorie : String
+    - vitesse : double
+    ..
+    + getId() : int
+    + getNom() : String
+    + getCategorie() : String
+    + getVitesse() : double
+    + getVitesseMps() : double
+    + toString() : String
+  }
+
+  class Point3D {
+    - x : double
+    - y : double
+    - z : double
+    ..
+    + getX() : double
+    + getY() : double
+    + getZ() : double
+    + distanceTo(other : Point3D) : double
+    + interpoler(other : Point3D, t : double) : Point3D
+    + toString() : String
+  }
+
+  class Phase {
+    - id : String
+    - nom : String
+    - points : List<Point3D>
+    ..
+    + getId() : String
+    + getNom() : String
+    + getPoints() : List<Point3D>
+    + getLongueur() : double
+    + toString() : String
+  }
+
+  class CircuitAD {
+    - phases : List<Phase>
+    - segmentsNormal : List<Segment>
+    - segmentsLoop : List<Segment>
+    - segmentsFinal : List<Segment>
+    - segmentsAffichage : List<Segment>
+    ..
+    + getPhases() : List<Phase>
+    + getSegmentsNormal() : List<Segment>
+    + getSegmentsLoop() : List<Segment>
+    + getSegmentsFinal() : List<Segment>
+    + getSegmentsCircuit() : List<Segment>
+    + getLongueurTotale() : double
+  }
+
+  class "CircuitAD.Segment" as Segment << (I,#FFFFAA) inner >> {
+    - debut : Point3D
+    - fin : Point3D
+    - longueur : double
+    ..
+    + getDebut() : Point3D
+    + getFin() : Point3D
+    + getLongueur() : double
+    + positionA(t : double) : Point3D
+  }
+
+  class Aeronef {
+    - indicatif : String
+    - nbToursMax : int
+    - tempsDepart : double
+    - segmentIndex : int
+    - distSurSegment : double
+    - toursEffectues : int
+    - actif : boolean
+    - termine : boolean
+    - positionCourante : Point3D
+    - segDx : double
+    - segDz : double
+    ..
+    + getIndicatif() : String
+    + getType() : TypeAeronef
+    + getNbToursMax() : int
+    + getTempsDepart() : double
+    + isActif() : boolean
+    + isTermine() : boolean
+    + getToursEffectues() : int
+    + getPositionCourante() : Point3D
+    + getSegDx() : double
+    + getSegDz() : double
+    + avancer(segN, segL, segF, dt, tempsEcoule) : void
+    + reinitialiser() : void
+    + toString() : String
+  }
+
+  class GestionnaireConflits {
+    - distanceSeuil : double
+    - conflitsActuels : List<Conflit>
+    - proximites : List<Conflit>
+    ..
+    + GestionnaireConflits(distanceSeuil : double)
+    + detecter(aeronefs : List<Aeronef>) : List<Conflit>
+    + getConflitsActuels() : List<Conflit>
+    + getProximites() : List<Conflit>
+    + getDistanceSeuil() : double
+    + setDistanceSeuil(d : double) : void
+    + getIndicatifsEnConflit() : List<String>
+  }
+
+  class "GestionnaireConflits.Conflit" as Conflit << (I,#FFFFAA) inner >> {
+    - a1 : Aeronef
+    - a2 : Aeronef
+    - distance : double
+    ..
+    + getA1() : Aeronef
+    + getA2() : Aeronef
+    + getDistance() : double
+    + toString() : String
+  }
+
+  class Simulation {
+    - circuit : CircuitAD
+    - aeronefs : List<Aeronef>
+    - gestConflits : GestionnaireConflits
+    - listener : TickListener
+    - enCours : boolean
+    - pause : boolean
+    - tempsEcoule : double
+    - simSpeed : double
+    - seekTarget : double
+    - {static} TICK_MS : int = 33
+    ..
+    + Simulation(circuit, aeronefs, gestConflits)
+    + demarrer() : void
+    + arreter() : void
+    + mettreEnPause() : void
+    + reprendreDepauze() : void
+    + requestSeek(targetSeconds : double) : void
+    + setTickListener(l : TickListener) : void
+    + setSimSpeed(s : double) : void
+    + getTempsEcoule() : double
+    + isEnCours() : boolean
+    + isPause() : boolean
+    + getAeronefs() : List<Aeronef>
+  }
+
+  interface "Simulation.TickListener" as TickListener << (I,#AAFFAA) interface >> {
+    + onTick(tempsEcoule : double,\n  actifs : List<Aeronef>,\n  conflits : List<Conflit>) : void
+  }
+
+  class GestionnaireLEDs {
+    - pi4j : Context
+    - ledVert : DigitalOutput
+    - ledJaune : DigitalOutput
+    - ledRouge : DigitalOutput
+    - buzzer : DigitalOutput
+    - disponible : boolean
+    ..
+    + GestionnaireLEDs()
+    + mettreAJour(conflit : boolean,\n  proximite : boolean,\n  buzzerCoupe : boolean) : void
+    + eteindreTout() : void
+    + fermer() : void
+  }
+
+  class GestionnaireLCD {
+    - {static} LCD_ADDR : int = 0x27
+    - {static} I2C_BUS : int = 1
+    - i2c : I2C
+    - pi4j : Context
+    - disponible : boolean
+    - ligne1Ref : AtomicReference<String>
+    - ligne2Ref : AtomicReference<String>
+    - misAJour : AtomicBoolean
+    - actif : AtomicBoolean
+    ..
+    + GestionnaireLCD()
+    + afficherConflit(ind1 : String,\n  ind2 : String,\n  distanceM : double) : void
+    + afficherProximite(ind1 : String,\n  ind2 : String,\n  distanceM : double) : void
+    + afficherRAS() : void
+    + fermer() : void
+  }
+
+  class GestionnaireBoutons {
+    - {static} STEP : double = 15.0
+    - pi4j : Context
+    - btnDroite : DigitalInput
+    - btnBas : DigitalInput
+    - btnGauche : DigitalInput
+    - btnHaut : DigitalInput
+    - actif : AtomicBoolean
+    - disponible : boolean
+    ..
+    + GestionnaireBoutons(cameraCallback,\n  voyantCallback)
+    + fermer() : void
+  }
+
+  interface "GestionnaireBoutons.CameraCallback" as CameraCallback << (I,#AAFFAA) interface >> {
+    + deplacer(dx : double, dz : double) : void
+  }
+
+  interface "GestionnaireBoutons.VoyantCallback" as VoyantCallback << (I,#AAFFAA) interface >> {
+    + setEtat(dir : Direction,\n  appuye : boolean) : void
+  }
+
+  enum "GestionnaireBoutons.Direction" as Direction << (E,#FFD700) enum >> {
+    HAUT
+    BAS
+    GAUCHE
+    DROITE
+  }
+}
+
+' ══════════════════════════════════════════════════════════════
+'  PACKAGE vue
+' ══════════════════════════════════════════════════════════════
+package vue #E8FDF0 {
+
+  class Vue3D {
+    - {static} SCALE : double = 10.0
+    - {static} RAYON_SPHERE : double = 8.0
+    - subScene : SubScene
+    - camera : PerspectiveCamera
+    - groupe3D : Group
+    - groupeAeronefs : Group
+    - sphereMap : Map<String, Sphere>
+    - noeudMap : Map<String, Node>
+    - textMap : Map<String, Text>
+    - modele3DFile : File
+    - modeles3DParType : Map<String, File>
+    - vueMode : VueMode
+    ..
+    + initialiser(conteneur : StackPane) : void
+    + afficherCircuit(circuit : CircuitAD) : void
+    + initialiserSpheres(aeronefs : List<Aeronef>) : void
+    + rafraichirAeronefs(aeronefs, conflits, proximites) : void
+    + setCameraVueHaute() : void
+    + setCameraVueBasse() : void
+    + deplacerCamera(dx : double, dz : double) : void
+    + zoomer(delta : double) : void
+    + rotationCamera(dAngle : double) : void
+    + setModele3D(f : File) : void
+    + setModele3DPourType(typeNom : String, f : File) : void
+    + setModeles3DParType(map : Map<String, File>) : void
+  }
+
+  enum "Vue3D.VueMode" as VueMode << (E,#FFD700) enum >> {
+    HAUTE
+    BASSE
+  }
+
+  class VuePanneauControle {
+    + ledRouge : Circle
+    + ledJaune : Circle
+    + ledVerte : Circle
+    + voyantNord : Circle
+    + voyantSud : Circle
+    + voyantOuest : Circle
+    + voyantEst : Circle
+    - tfDistanceSeuil : TextField
+    - sliderDistance : Slider
+    - labelBuzzer : Label
+    - btnToggleBuzzer : Button
+    - labelPremierVol : Label
+    - labelConflitProche : Label
+    - buzzerActif : boolean
+    ..
+    + VuePanneauControle(controleur : ControleurPrincipal)
+    + buildView() : VBox
+    + getDistanceSeuil() : double
+    + setDistanceSeuil(metres : double) : void
+    + allumerLed(led : Circle, classe : String) : void
+    + eteindreLed(led : Circle) : void
+    + activerVoyant(voyant : Circle) : void
+    + desactiverVoyant(voyant : Circle) : void
+    + isBuzzerActif() : boolean
+    + setBuzzerActif(actif : boolean) : void
+    + setConflits(premierVol : String, conflitProche : String) : void
+    + reinitialiserConflits() : void
+    + activerVueHaute() : void
+    + activerVueBasse() : void
+    + activerContrePlongee() : void
+    + setVue3D(v : Vue3D) : void
+  }
+}
+
+' ══════════════════════════════════════════════════════════════
+'  PACKAGE controleur
+' ══════════════════════════════════════════════════════════════
+package controleur #FDF5E8 {
+
+  class ControleurPrincipal {
+    - stage : Stage
+    - fichierCircuit : File
+    - fichierTypes : File
+    - fichierAeronefs : File
+    - fichierModele3D : File
+    - modeles3DParType : Map<String, File>
+    - typesCharges : List<TypeAeronef>
+    - etat : EtatSimulation
+    - circuit : CircuitAD
+    - types : List<TypeAeronef>
+    - aeronefs : List<Aeronef>
+    - gestConflits : GestionnaireConflits
+    - simulation : Simulation
+    - threadSimulation : Thread
+    - gestLEDs : GestionnaireLEDs
+    - gestLCD : GestionnaireLCD
+    - gestBoutons : GestionnaireBoutons
+    - dureeSimulation : double
+    - vue3D : Vue3D
+    - panneau : VuePanneauControle
+    - vitesseFacteur : double
+    ..
+    + ControleurPrincipal(stage : Stage)
+    + buildScene() : Scene
+    + setStatut(message : String) : void
+    + getFichierCircuit() : File
+    + getFichierTypes() : File
+    + getFichierAeronefs() : File
+    + getStage() : Stage
+  }
+
+  enum "ControleurPrincipal.EtatSimulation" as EtatSimulation << (E,#FFD700) enum >> {
+    ARRET
+    EN_COURS
+    PAUSE
+  }
+}
+
+' ══════════════════════════════════════════════════════════════
+'  PACKAGE parseur
+' ══════════════════════════════════════════════════════════════
+package parseur #F8EDF8 {
+
+  class ParseurCircuit {
+    + {static} charger(fichier : File) : CircuitAD
+  }
+
+  class ParseurTypeAeronefs {
+    + {static} charger(fichier : File) : List<TypeAeronef>
+  }
+
+  class ParseurAeronefs {
+    + {static} charger(fichier : File,\n  types : List<TypeAeronef>) : List<Aeronef>
+  }
+}
+
+' ══════════════════════════════════════════════════════════════
+'  Main (point d'entrée)
+' ══════════════════════════════════════════════════════════════
+class Main << (A,#FFAAAA) Application >> {
+  + start(stage : Stage) : void
+  + {static} main(args : String[]) : void
+}
+
+' ══════════════════════════════════════════════════════════════
+'  RELATIONS — Composition / Agrégation / Dépendance
+' ══════════════════════════════════════════════════════════════
+
+' ── Modèle interne ──────────────────────────────────────────────
+CircuitAD "1" *-down- "1..*" Phase         : contient >
+CircuitAD "1" *-down- "1..*" Segment       : construit >
+Phase      "1" *-right- "2..*" Point3D     : composée de >
+Segment    -down-> Point3D                  : début / fin
+CircuitAD +-- Segment
+
+' ── Aéronef ─────────────────────────────────────────────────────
+Aeronef  -right-> TypeAeronef              : est de type >
+Aeronef  -down->  Point3D                  : positionCourante
+
+' ── Simulation ──────────────────────────────────────────────────
+Simulation "1" -right-> "1" CircuitAD
+Simulation "1" -down->  "0..*" Aeronef
+Simulation "1" -left->  "1" GestionnaireConflits
+Simulation ..>  TickListener               : notifie via >
+Simulation +--  TickListener
+
+' ── Conflits ────────────────────────────────────────────────────
+GestionnaireConflits "1" *-down- "0..*" Conflit : produit >
+GestionnaireConflits +-- Conflit
+Conflit -right-> Aeronef                   : a1, a2
+
+' ── Boutons ─────────────────────────────────────────────────────
+GestionnaireBoutons +-- CameraCallback
+GestionnaireBoutons +-- VoyantCallback
+GestionnaireBoutons +-- Direction
+GestionnaireBoutons ..> CameraCallback     : utilise >
+GestionnaireBoutons ..> VoyantCallback     : utilise >
+GestionnaireBoutons -right-> Direction     : référence
+
+' ── Vue3D ───────────────────────────────────────────────────────
+Vue3D -down->  CircuitAD                   : affiche >
+Vue3D -down->  Aeronef                     : affiche >
+Vue3D -down->  Conflit                     : colore selon >
+Vue3D +--      VueMode
+
+' ── VuePanneauControle ──────────────────────────────────────────
+VuePanneauControle -right-> Vue3D          : pilote caméra >
+VuePanneauControle -down->  ControleurPrincipal : délègue actions >
+
+' ── ControleurPrincipal ─────────────────────────────────────────
+ControleurPrincipal "1" -right-> "1" Simulation        : orchestre >
+ControleurPrincipal "1" -right-> "1" GestionnaireLEDs  : met à jour >
+ControleurPrincipal "1" -right-> "1" GestionnaireLCD   : met à jour >
+ControleurPrincipal "1" -right-> "1" GestionnaireBoutons : utilise >
+ControleurPrincipal "1" -left->  "1" Vue3D             : met à jour >
+ControleurPrincipal "1" -left->  "1" VuePanneauControle : met à jour >
+ControleurPrincipal ..> TickListener                    : implémente (lambda) >
+ControleurPrincipal +-- EtatSimulation
+
+' ── Parseurs ────────────────────────────────────────────────────
+ParseurCircuit       ..> CircuitAD     : <<crée>>
+ParseurTypeAeronefs  ..> TypeAeronef   : <<crée>>
+ParseurAeronefs      ..> Aeronef       : <<crée>>
+ParseurAeronefs      ..> TypeAeronef   : <<résout>>
+
+' ── Main ────────────────────────────────────────────────────────
+Main -down-> ControleurPrincipal       : instancie >
+
+@enduml

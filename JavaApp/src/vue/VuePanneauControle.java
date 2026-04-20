@@ -42,15 +42,15 @@ public class VuePanneauControle {
     private boolean enMiseAJour = false;
 
     // ── Section 3 : LEDs ─────────────────────────────────────────────────────
-    Circle ledRouge;
-    Circle ledJaune;
-    Circle ledVerte;
+    public Circle ledRouge;
+    public Circle ledJaune;
+    public Circle ledVerte;
 
     // ── Section 4 : Boutons poussoirs ────────────────────────────────────────
-    Circle voyantNord;
-    Circle voyantSud;
-    Circle voyantOuest;
-    Circle voyantEst;
+    public Circle voyantNord;
+    public Circle voyantSud;
+    public Circle voyantOuest;
+    public Circle voyantEst;
 
     // ── Section 5 : Buzzer ───────────────────────────────────────────────────
     Label  labelBuzzer;
